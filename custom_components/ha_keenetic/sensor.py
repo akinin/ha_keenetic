@@ -1,423 +1,216 @@
-"""Sensor platform for Keenetic integration."""
-from __future__ import annotations
+"""The Keenetic API sensor entities."""
+
 from dataclasses import dataclass
-from datetime import datetime
+from collections.abc import Callable
+from typing import Any
+from datetime import UTC, datetime, timedelta
 import logging
-from typing import Any, Optional
 
 from homeassistant.components.sensor import (
-    SensorEntity,
-    SensorEntityDescription,
     SensorDeviceClass,
     SensorStateClass,
-)
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo, EntityCategory
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import StateType
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
+    SensorEntity,
+    SensorEntityDescription,
 )
 from homeassistant.const import (
-    PERCENTAGE,
-    UnitOfTime,
-    UnitOfTemperature,
-    UnitOfInformation,
+    PERCENTAGE, 
+    UnitOfInformation, 
+    EntityCategory, 
     UnitOfDataRate,
+    UnitOfInformation,
+    UnitOfTime,
 )
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.typing import StateType
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MANUFACTURER
-from .icons import *
+from .coordinator import KeeneticRouterCoordinator
+from .keenetic import KeeneticFullData
+from .const import (
+    DOMAIN,
+    COORD_FULL,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
-@dataclass
-class KeeneticSensorEntityDescription(SensorEntityDescription):
-    """Class describing Keenetic sensor entities."""
-    value_fn: callable = lambda x: x
-    available_fn: callable = lambda x: True
-    use_full_data: bool = False
 
-@dataclass
-class InterfaceSensorEntityDescription(SensorEntityDescription):
-    """Interface sensor entity description."""
-    interface_id: str = None
-    value_fn: callable = lambda x: x
-    available_fn: callable = lambda x: True
-    extra_attributes_fn: callable = lambda x: {}
-
-@dataclass
-class MeshNodeSensorEntityDescription(SensorEntityDescription):
-    """Mesh node sensor entity description."""
-    node_id: str = None
-    value_fn: callable = lambda x: x
-    available_fn: callable = lambda x: True
+@dataclass(frozen=True, kw_only=True)
+class KeeneticRouterSensorEntityDescription(SensorEntityDescription):
+    """A class that describes sensor entities."""
+    value: Callable[[KeeneticFullData, Any], Any] = (
+        lambda coordinator, key: coordinator.data.show_system[key] if coordinator.data.show_system[key] is not None else None
+    )
+    attributes_fn: Callable[[KeeneticFullData], dict[str, Any]] | None = None
 
 
-SENSOR_TYPES: tuple[KeeneticSensorEntityDescription, ...] = (
+def convert_uptime(uptime: int) -> datetime:
+    """Convert uptime."""
+    if uptime != None:
+        return (datetime.now(tz=UTC) - timedelta(seconds=int(uptime))).replace(second=0, microsecond=0)
+    else:
+        return None
 
-    KeeneticSensorEntityDescription(
-        key="cpu_usage",
-        name="CPU Usage",
-        native_unit_of_measurement=PERCENTAGE,
+def convert_data_size(data_size: int = 0) -> float:
+    """Convert data_size."""
+    return round(data_size/1024/1024, 3)
+
+def ind_wan_ip_adress(fdata: KeeneticFullData):
+    """Определение внешнего IP адреса."""
+    try:
+        data_p_i = fdata.priority_interface
+        show_interface = fdata.show_interface
+        priority_interface = sorted(data_p_i, key=lambda x: data_p_i[x]['order'])
+        for row in priority_interface:
+            if show_interface[row]["connected"] == "yes":
+                if row.startswith('Wireguard'):
+                    return show_interface[row]["wireguard"]["peer"][0]["remote"]
+                else:
+                    return show_interface[row]["address"]
+    except Exception as ex:
+        _LOGGER.debug(f'Not ind_wan_ip_adress - {ex}')
+        return None
+
+
+SENSOR_TYPES: tuple[KeeneticRouterSensorEntityDescription, ...] = (
+    KeeneticRouterSensorEntityDescription(
+        key="cpuload",
         state_class=SensorStateClass.MEASUREMENT,
-        icon=ICON_CPU,
-        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement=PERCENTAGE,
     ),
-    KeeneticSensorEntityDescription(
+    KeeneticRouterSensorEntityDescription(
+        key="memory",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        value=lambda coordinator, key: int(float(coordinator.data.show_system[key].split('/')[0])/float(coordinator.data.show_system[key].split('/')[1])*100),
+    ),
+    KeeneticRouterSensorEntityDescription(
         key="uptime",
-        name="Uptime",
-        native_unit_of_measurement=UnitOfTime.SECONDS,
-        device_class=SensorDeviceClass.DURATION,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon=ICON_UPTIME,
+        device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
+        value=lambda coordinator, key: convert_uptime(coordinator.data.show_system[key]),
     ),
-    KeeneticSensorEntityDescription(
-        key="memory_usage",
-        name="Memory Usage",
-        native_unit_of_measurement=PERCENTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon=ICON_MEMORY,
+    KeeneticRouterSensorEntityDescription(
+        key="wan_ip_adress",
         entity_category=EntityCategory.DIAGNOSTIC,
+        value=lambda coordinator, key: ind_wan_ip_adress(coordinator.data),
     ),
-    KeeneticSensorEntityDescription(
-        key="memory_free",
-        name="Memory Free",
-        native_unit_of_measurement=UnitOfInformation.BYTES,
+    KeeneticRouterSensorEntityDescription(
+        key="clients_wifi",
         state_class=SensorStateClass.MEASUREMENT,
-        device_class=SensorDeviceClass.DATA_SIZE,
-        icon=ICON_MEMORY,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda x: x * 1024,
+        value=lambda coordinator, key: len(coordinator.data.show_associations.get("station", [])),
     ),
-    
-    KeeneticSensorEntityDescription(
+    KeeneticRouterSensorEntityDescription(
         key="hostname",
-        name="Hostname",
-        icon=ICON_ROUTER,
-    ),
-    KeeneticSensorEntityDescription(
-        key="domainname",
-        name="Domain Name",
-        icon=ICON_DOMAIN,
-    ),
-    KeeneticSensorEntityDescription(
-        key="firmware_version",
-        name="Firmware Version",
-        icon=ICON_FIRMWARE,
-        entity_category=EntityCategory.DIAGNOSTIC
-    ),
-    KeeneticSensorEntityDescription(
-        key="firmware_branch",
-        name="Firmware Branch",
-        icon=ICON_FIRMWARE,
-        entity_category=EntityCategory.DIAGNOSTIC
-    ),
-    KeeneticSensorEntityDescription(
-        key="model",
-        name="Model",
-        icon=ICON_ROUTER_WIRELESS,
-        entity_category=EntityCategory.DIAGNOSTIC
-    ),
-    KeeneticSensorEntityDescription(
-        key="device",
-        name="Device",
-        icon=ICON_ROUTER_WIRELESS,
-        entity_category=EntityCategory.DIAGNOSTIC
-    ),
-    KeeneticSensorEntityDescription(
-        key="manufacturer",
-        name="Manufacturer",
-        icon=ICON_FACTORY,
-        entity_category=EntityCategory.DIAGNOSTIC
-    ),
-    KeeneticSensorEntityDescription(
-        key="hardware_version",
-        name="Hardware Version",
-        icon=ICON_CHIP,
-        entity_category=EntityCategory.DIAGNOSTIC
-    ),
-    KeeneticSensorEntityDescription(
-        key="mesh_nodes_count",
-        name="Mesh Nodes Count",
-        icon="mdi:access-point-network",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda x: len(x.get("mesh", {})),
-        use_full_data=True
+        value=lambda coordinator, key: coordinator.data.show_system.get("hostname", ""),
+    ),
+    KeeneticRouterSensorEntityDescription(
+        key="domainname",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value=lambda coordinator, key: coordinator.data.show_system.get("domainname", ""),
     ),
 )
 
-INTERFACE_SENSORS: list[InterfaceSensorEntityDescription] = [
-    InterfaceSensorEntityDescription(
-        key="link",
-        name="Link Status",
-        icon=ICON_ETHERNET_ON,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda x: "up" if x.get("link") == "up" else "down",
-        extra_attributes_fn=lambda x: {
-            "rx_bytes": x.get("rxbytes", 0),
-            "tx_bytes": x.get("txbytes", 0),
-        },
+SENSORS_STAT_INTERFACE: tuple[KeeneticRouterSensorEntityDescription, ...] = (
+    KeeneticRouterSensorEntityDescription(
+        key="rxbytes",
+        state_class=SensorDeviceClass.DATA_SIZE,
+        native_unit_of_measurement=UnitOfInformation.MEGABYTES,
+        value=lambda coordinator, obj_id: convert_data_size(coordinator.data.stat_interface[obj_id].get('rxbytes')),
     ),
-    InterfaceSensorEntityDescription(
-        key="speed",
-        name="Speed",
-        icon=ICON_SPEED,
+    KeeneticRouterSensorEntityDescription(
+        key="txbytes",
+        state_class=SensorDeviceClass.DATA_SIZE,
+        native_unit_of_measurement=UnitOfInformation.MEGABYTES,
+        value=lambda coordinator, obj_id: convert_data_size(coordinator.data.stat_interface[obj_id].get('txbytes')),
+    ),
+    KeeneticRouterSensorEntityDescription(
+        key="timestamp",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value=lambda coordinator, obj_id: convert_uptime(coordinator.data.show_interface[obj_id].get('uptime')),
+    ),
+    KeeneticRouterSensorEntityDescription(
+        key="rxspeed",
+        device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.MEGABITS_PER_SECOND,
-        state_class=SensorStateClass.MEASUREMENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda x: x.get("speed", 0),
-        available_fn=lambda x: x.get("link") == "up",
+        value=lambda coordinator, obj_id: convert_data_size(coordinator.data.stat_interface[obj_id].get('rxspeed')),
     ),
-    InterfaceSensorEntityDescription(
-        key="rx_speed",
-        name="Receive Speed",
-        icon=ICON_DOWNLOAD,
-        native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
-        state_class=SensorStateClass.MEASUREMENT,
+    KeeneticRouterSensorEntityDescription(
+        key="txspeed",
         device_class=SensorDeviceClass.DATA_RATE,
-        value_fn=lambda x: x.get("rxspeed", 0),
+        native_unit_of_measurement=UnitOfDataRate.MEGABITS_PER_SECOND,
+        value=lambda coordinator, obj_id: convert_data_size(coordinator.data.stat_interface[obj_id].get('txspeed')),
     ),
-    InterfaceSensorEntityDescription(
-        key="tx_speed",
-        name="Transmit Speed",
-        icon=ICON_UPLOAD,
-        native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
-        state_class=SensorStateClass.MEASUREMENT,
-        device_class=SensorDeviceClass.DATA_RATE,
-        value_fn=lambda x: x.get("txspeed", 0),
-    ),
-]
+)
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
+    entry: ConfigEntry, 
+    async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up the Keenetic sensors."""
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
-    
-    entities = []
-    
+    coordinator = hass.data[DOMAIN][entry.entry_id][COORD_FULL]
+
+    sensors = []
     for description in SENSOR_TYPES:
-        entities.append(KeeneticSensor(coordinator, description, config_entry))
-    
-    if coordinator.data and "interface" in coordinator.data:
-        _LOGGER.debug("Found interfaces: %s", coordinator.data["interface"].keys())
-        for interface_id, interface_data in coordinator.data["interface"].items():
-            if interface_data.get("type") in ["wan", "port"]:
-                entities.append(
-                    KeeneticInterfaceSensor(
-                        coordinator,
-                        interface_id,
-                        config_entry
-                    )
-                )
+        try:
+            if description.value(coordinator, description.key) is not None:
+                sensors.append(KeeneticRouterSensor(coordinator, description, description.key, description.key))
+        except Exception as err:
+            _LOGGER.debug(f'async_setup_entry sensor SENSOR_TYPES {description} err - {err}')
 
-    if coordinator.data and "mesh" in coordinator.data:
-        _LOGGER.debug("Found mesh nodes: %s", coordinator.data["mesh"].keys())
-        for node_id, node_data in coordinator.data["mesh"].items():
-            _LOGGER.debug("Adding mesh node: %s, data: %s", node_id, node_data)
-            entities.append(
-                KeeneticMeshNodeSensor(
-                    coordinator,
-                    node_id,
-                    config_entry
-                )
-            )
-    else:
-        _LOGGER.debug("No mesh data found in coordinator data: %s", coordinator.data.keys())
-    
-    async_add_entities(entities)
+    for interface, data_interface in coordinator.data.show_interface.items():
+        if interface in coordinator.router.request_interface:
+            new_name = coordinator.router.request_interface[interface]
+            for description in SENSORS_STAT_INTERFACE:
+                try:
+                    sensors.append(KeeneticRouterSensor(coordinator, description, interface, new_name))
+                except Exception as err:
+                    _LOGGER.debug(f'async_setup_entry sensor SENSORS_STAT_INTERFACE {description} err - {err}')
 
-class KeeneticSensor(CoordinatorEntity, SensorEntity):
-    """Representation of a Keenetic sensor."""
+    async_add_entities(sensors, False)
+
+class KeeneticRouterSensor(CoordinatorEntity[KeeneticRouterCoordinator], SensorEntity):
+    _attr_has_entity_name = True
+    entity_description: KeeneticRouterSensorEntityDescription
 
     def __init__(
-        self,
-        coordinator: DataUpdateCoordinator,
-        description: KeeneticSensorEntityDescription,
-        config_entry: ConfigEntry,
+            self,
+            coordinator: KeeneticRouterCoordinator,
+            description: KeeneticRouterSensorEntityDescription,
+            obj_id: str,
+            obj_name: str,
     ) -> None:
-        """Initialize the sensor."""
         super().__init__(coordinator)
-        self.entity_description = description
-        self._config_entry = config_entry
-        
-        self._attr_unique_id = f"{config_entry.entry_id}_{description.key}"
-        self._attr_has_entity_name = True
-        self._attr_device_info = self._get_device_info()
 
-    def _get_device_info(self) -> DeviceInfo:
-        """Return device info."""
-        return DeviceInfo(
-            identifiers={(DOMAIN, self._config_entry.entry_id)},
-            name=f"Keenetic {self.coordinator.data.get('device', 'Router')}",
-            manufacturer=self.coordinator.data.get("manufacturer", MANUFACTURER),
-            model=self.coordinator.data.get("model", "Router"),
-            sw_version=self.coordinator.data.get("firmware_version", ""),
-            hw_version=self.coordinator.data.get("hardware_version", ""),
-        )
+        self._attr_device_info = coordinator.device_info
+        self.obj_id = obj_id
+        self._attr_unique_id = f"{coordinator.router.mac}_{description.key}"
+        if obj_id != description.key:
+            self._attr_unique_id += f"_{obj_id}"
+            
+        self.entity_description = description
+        self._attr_translation_key = description.key
+        self._attr_translation_placeholders = {"name": f"{obj_name}"}
+        
+        device_name = coordinator.router.model.lower().replace(' ', '_')
+        self.entity_id = f"sensor.{device_name}_{description.key}"
+        if obj_id != description.key:
+            self.entity_id += f"_{obj_id}"
 
     @property
     def native_value(self) -> StateType:
-        """Return the state of the sensor."""
-        if self.coordinator.data is None:
-            return None
-            
-        if self.entity_description.use_full_data:
-            return self.entity_description.value_fn(self.coordinator.data)
+        """Sensor value."""
+        return self.entity_description.value(self.coordinator, self.obj_id)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str] | None:
+        """Return the state attributes of the sensor."""
+        if self.entity_description.attributes_fn is not None:
+            return self.entity_description.attributes_fn(self.coordinator.data)
         else:
-            value = self.coordinator.data.get(self.entity_description.key)
-            if value is None:
-                return None
-            return self.entity_description.value_fn(value)
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return (
-            super().available
-            and self.coordinator.data is not None
-            and self.entity_description.available_fn(self.coordinator.data)
-        )
-
-class KeeneticMeshNodeSensor(CoordinatorEntity, SensorEntity):
-    """Representation of a Keenetic Mesh Node sensor."""
-
-    def __init__(
-        self,
-        coordinator: DataUpdateCoordinator,
-        node_id: str,
-        config_entry: ConfigEntry,
-    ) -> None:
-        """Initialize the mesh node sensor."""
-        super().__init__(coordinator)
-        self._node_id = node_id
-        self._config_entry = config_entry
-        
-        node_data = self.coordinator.data["mesh"][node_id]
-        model = node_data.get("model", "")
-        known_host = node_data.get("known-host", "")
-        self._attr_name = f"Mesh {model} ({known_host})" if known_host else f"Mesh {model}" or f"Mesh Node {node_id}"
-        self._attr_unique_id = f"{config_entry.entry_id}_mesh_node_{node_id}"
-        self.entity_id = f"sensor.keenetic_mesh_node_{node_id.replace(':', '_')}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, config_entry.entry_id)},
-        )
-
-    @property
-    def icon(self) -> str:
-        """Return the icon of the sensor."""
-        if self.coordinator.data is None:
-            return ICON_MESH_NODE_OFFLINE
-            
-        mesh_data = self.coordinator.data.get("mesh", {})
-        node_data = mesh_data.get(self._node_id, {})
-        return ICON_MESH_NODE if node_data.get("status") == "connected" else ICON_MESH_NODE_OFFLINE
-
-    @property
-    def native_value(self):
-        """Return the state of the sensor."""
-        if self.coordinator.data is None:
             return None
-            
-        mesh_data = self.coordinator.data.get("mesh", {})
-        node_data = mesh_data.get(self._node_id, {})
-        return node_data.get("status", "unknown")
-
-    @property
-    def extra_state_attributes(self):
-        """Return the state attributes."""
-        if self.coordinator.data is None:
-            _LOGGER.debug("Coordinator data is None")
-            return {}
-            
-        mesh_data = self.coordinator.data.get("mesh", {})
-        _LOGGER.debug("Mesh data from coordinator: %s", mesh_data)
-        
-        node_data = mesh_data.get(self._node_id, {})
-        _LOGGER.debug("Node data for %s: %s", self._node_id, node_data)
-        
-        attributes = node_data.get("attributes", {})
-        _LOGGER.debug("Node attributes: %s", attributes)
-        
-        result = {
-            "ip_address": attributes.get("ip", ""),
-            "mode": attributes.get("mode", ""),
-            "hw_id": attributes.get("hw_id", ""),
-            "firmware": attributes.get("firmware", ""),
-            "firmware_available": attributes.get("firmware_available", ""),
-            "memory": attributes.get("memory", ""),
-            "uptime": attributes.get("uptime", ""),
-            "cloud_state": attributes.get("cloud_agent_state", ""),
-            "internet_available": attributes.get("internet_available", False),
-        }
-        
-        _LOGGER.debug("Returning attributes: %s", result)
-        return result
-
-class KeeneticInterfaceSensor(CoordinatorEntity, SensorEntity):
-    """Representation of a Keenetic interface sensor."""
-
-    def __init__(
-        self,
-        coordinator: DataUpdateCoordinator,
-        interface_id: str,
-        config_entry: ConfigEntry,
-    ) -> None:
-        """Initialize the interface sensor."""
-        super().__init__(coordinator)
-        self._interface_id = interface_id
-        self._config_entry = config_entry
-        
-        interface_data = self.coordinator.data["interface"][interface_id]
-        self._attr_name = interface_data['label']
-        self._attr_unique_id = f"{config_entry.entry_id}_interface_{interface_id}"
-        self.entity_id = f"sensor.keenetic_interface_{interface_id}"
-        
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, config_entry.entry_id)},
-            name=f"Keenetic {coordinator.data.get('device', 'Router')}",
-            manufacturer=coordinator.data.get("manufacturer", "Keenetic"),
-            model=coordinator.data.get("model", "Router"),
-            sw_version=coordinator.data.get("firmware_version", ""),
-            hw_version=coordinator.data.get("hardware_version", ""),
-        )
-
-    @property
-    def native_value(self):
-        """Return the state of the sensor."""
-        if self.coordinator.data is None:
-            return None
-            
-        interface_data = self.coordinator.data["interface"][self._interface_id]
-        return interface_data["link"]
-
-    @property
-    def extra_state_attributes(self):
-        """Return the state attributes."""
-        if self.coordinator.data is None:
-            return {}
-            
-        interface_data = self.coordinator.data["interface"][self._interface_id]
-        
-        return {
-            "interface_id": interface_data["id"],
-            "type": interface_data.get("type"),
-            "description": interface_data.get("description"),
-            "speed": f"{interface_data.get('speed', 0)} Mbps",
-            "rx_speed": f"{interface_data.get('rxspeed', 0)} B/s",
-            "tx_speed": f"{interface_data.get('txspeed', 0)} B/s",
-            "rx_bytes": interface_data.get("rxbytes", 0),
-            "tx_bytes": interface_data.get("txbytes", 0),
-            **interface_data.get("attributes", {})
-        }
-
-    @property
-    def icon(self):
-        """Return the icon of the sensor."""
-        return ICON_ETHERNET_ON if self.native_value == "up" else ICON_ETHERNET_OFF

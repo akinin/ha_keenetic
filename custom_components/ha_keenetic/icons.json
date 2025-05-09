@@ -1,0 +1,93 @@
+{
+    "entity": {
+        "switch": {
+            "interface_wifi": {
+                "default": "mdi:wifi",
+                "state": {
+                    "off": "mdi:wifi-off",
+                    "on": "mdi:wifi"
+                }
+            },
+            "interface_wireguard": {
+                "default": "mdi:vpn",
+                "state": {
+                    "off": "mdi:cancel",
+                    "on": "mdi:vpn"
+                }
+            },
+            "interface": {
+                "default": "mdi:ethernet",
+                "state": {
+                    "off": "mdi:ethernet-off",
+                    "on": "mdi:ethernet"
+                }
+            },
+            "port_forwarding": {
+                "default": "mdi:swap-horizontal-bold",
+                "state": {
+                    "off": "mdi:cancel",
+                    "on": "mdi:swap-horizontal-bold"
+                }
+            },
+            "web_configurator_access": {
+                "default": "mdi:web",
+                "state": {
+                    "off": "mdi:web-off",
+                    "on": "mdi:web"
+                }
+            },
+            "power_usb": {
+                "default": "mdi:usb-flash-drive",
+                "state": {
+                    "off": "mdi:usb-flash-drive-outline",
+                    "on": "mdi:usb-flash-drive"
+                }
+            }
+        },
+        "sensor": {
+            "hostname": {
+                "default": "mdi:router"
+            },
+            "domainname": {
+                "default": "mdi:domain"
+            },
+            "clients_wifi": {
+                "default": "mdi:sitemap-outline"
+            },
+            "memory": {
+                "default": "mdi:memory"
+            },
+            "cpuload": {
+                "default": "mdi:cpu-32-bit"
+            },
+            "wan_ip_adress": {
+                "default": "mdi:ip-network"
+            },
+            "rxbytes": {
+                "default": "mdi:database-import"
+            },
+            "txbytes": {
+                "default": "mdi:database-export"
+            },
+            "rxspeed": {
+                "default": "mdi:download-network"
+            },
+            "txspeed": {
+                "default": "mdi:upload-network"
+            }
+        },
+        "binary_sensor": {
+            "connected_to_media": {
+                "default": "mdi:play-network",
+                "state": {
+                    "off": "mdi:play-network-outline",
+                    "on": "mdi:play-network"
+                }
+            }
+        }
+    },
+    "services": {
+        "request_api": "mdi:api",
+        "backup_router": "mdi:file-document-plus"
+    }
+}

@@ -1,209 +1,273 @@
-"""Switch platform for Keenetic integration."""
-from __future__ import annotations
+"""The Keenetic API binary switch entities."""
+
+from collections.abc import Callable
 from dataclasses import dataclass
 import logging
-from typing import Any, Final
+from typing import Any
 
-from homeassistant.components.switch import (
-    SwitchEntity,
-    SwitchEntityDescription,
-)
+from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.const import EntityCategory
+from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-)
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.typing import StateType
 
-from .const import DOMAIN, MANUFACTURER
-from .icons import ICON_WIFI, ICON_WIFI_OFF
+from .const import (
+    DOMAIN,
+    COORD_FULL,
+    CONF_CREATE_PORT_FRW,
+    COORD_RC_INTERFACE,
+)
+from .coordinator import (
+    KeeneticRouterCoordinator,
+)
+from .keenetic import DataRcInterface
 
 _LOGGER = logging.getLogger(__name__)
 
-@dataclass
-class KeeneticSwitchEntityDescription(SwitchEntityDescription):
-    """Class describing Keenetic switch entities."""
-    ap_id: str = None
-    value_fn: callable = lambda x: x
-    available_fn: callable = lambda x: True
 
-SWITCH_TYPES: Final[tuple[KeeneticSwitchEntityDescription, ...]] = (
+@dataclass(frozen=True, kw_only=True)
+class KeeneticSwitchEntityDescription(SwitchEntityDescription):
+
+    is_on_func: Callable[[KeeneticRouterCoordinator], bool | None]
+    on_func: Callable[[KeeneticRouterCoordinator], None]
+    off_func: Callable[[KeeneticRouterCoordinator], None]
+    placeholder: str | None = None
+
+SWITCH_TYPES: tuple[KeeneticSwitchEntityDescription, ...] = (
     KeeneticSwitchEntityDescription(
-        key="wifi_main",
-        name="WiFi Main",
-        icon="mdi:wifi",
-        ap_id="AccessPoint0",
-        value_fn=lambda x: x.get("link") == "up",
+        key="web_configurator_access",
+        is_on_func=lambda coordinator, label_sw: coordinator.data.show_rc_ip_http['security-level'].get('public', False),
+        on_func=lambda coordinator, label_sw: coordinator.router.turn_on_off_web_configurator_access(True),
+        off_func=lambda coordinator, label_sw: coordinator.router.turn_on_off_web_configurator_access(False),
     ),
     KeeneticSwitchEntityDescription(
-        key="wifi_guest",
-        name="WiFi Guest",
-        icon="mdi:wifi",
-        ap_id="AccessPoint1",
-        value_fn=lambda x: x.get("link") == "up",
+        key="power_usb",
+        is_on_func=lambda coordinator, label_sw: coordinator.data.show_rc_system_usb[int(label_sw)-1].get('power', False) == False, # ЧЗХ
+        on_func=lambda coordinator, label_sw: coordinator.router.turn_on_off_usb(True, label_sw),
+        off_func=lambda coordinator, label_sw: coordinator.router.turn_on_off_usb(False, label_sw),
+        placeholder="number",
     ),
 )
 
-async def async_setup_entry(
-    hass: HomeAssistant,
-    config_entry: ConfigEntry,
-    async_add_entities: AddEntitiesCallback,
-) -> None:
-    """Set up Keenetic switches."""
-    coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
-    api = hass.data[DOMAIN][config_entry.entry_id]["api"]
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback,) -> None:
 
-    entities = []
-    
-    _LOGGER.debug("Setting up Keenetic switches")
-    
-    if not coordinator.data:
-        _LOGGER.error("No data in coordinator")
-        return
-        
-    _LOGGER.debug("Coordinator data: %s", coordinator.data)
-    
-    if "interface" not in coordinator.data:
-        _LOGGER.error("No interface data in coordinator data")
-        return
-        
-    _LOGGER.debug("Interface data: %s", coordinator.data["interface"])
-    
-    wifi_interfaces = {
-        k: v for k, v in coordinator.data["interface"].items()
-        if k.startswith("WifiMaster") and "AccessPoint" in k
-    }
-    
-    _LOGGER.debug("Found WiFi interfaces: %s", wifi_interfaces)
-    
-    for interface_id, interface_data in wifi_interfaces.items():
-        _LOGGER.debug("Processing WiFi interface: %s = %s", interface_id, interface_data)
-        
-        if interface_data.get("ssid") or interface_data.get("description"):
-            _LOGGER.debug("Creating switch for interface: %s", interface_id)
-            entities.append(
-                KeeneticWiFiSwitch(
-                    coordinator,
-                    interface_id,
-                    config_entry,
-                    api
+    coordinator: KeeneticRouterCoordinator = hass.data[DOMAIN][entry.entry_id][COORD_FULL]
+    switchs: list[SwitchEntity] = []
+    if coordinator.router.hw_type == "router":
+        rc_interface: DataRcInterface = hass.data[DOMAIN][entry.entry_id][COORD_RC_INTERFACE].data
+
+        interfaces = coordinator.data.show_interface
+        for interface, data_interface in interfaces.items():
+            if ((data_interface.get('usedby', False)
+                and (interface.startswith('WifiMaster0') 
+                    or interface.startswith('WifiMaster1')))):
+                switchs.append(
+                    KeeneticInterfaceSwitchEntity(
+                        coordinator,
+                        data_interface,
+                        rc_interface[interface].name_interface,
+                    )
                 )
-            )
+            elif interface in coordinator.router.request_interface:
+                new_name = coordinator.router.request_interface[interface]
+                switchs.append(
+                    KeeneticInterfaceSwitchEntity(
+                        coordinator,
+                        data_interface,
+                        new_name,
+                    )
+                )
+
+        if entry.options.get(CONF_CREATE_PORT_FRW, False):
+            port_forwardings = coordinator.data.show_rc_ip_static
+            for index, port_frw in port_forwardings.items():
+                switchs.append(
+                    KeeneticPortForwardingSwitchEntity(
+                        coordinator,
+                        port_frw,
+                    )
+                )
+
+    for description in SWITCH_TYPES:
+        if description.key == "power_usb":
+            for row in coordinator.data.show_rc_system_usb:
+                switchs.append(KeeneticSwitchEntity(coordinator, description, row['port']))
         else:
-            _LOGGER.debug(
-                "Skipping interface %s: No SSID or description", 
-                interface_id
-            )
+            if coordinator.router.hw_type == "router":
+                switchs.append(KeeneticSwitchEntity(coordinator, description, description.key))
 
-    _LOGGER.debug("Created %d switch entities", len(entities))
-    if not entities:
-        _LOGGER.warning(
-            "No WiFi switches were created. Full interface data: %s",
-            coordinator.data.get("interface", {})
-        )
-    
-    async_add_entities(entities)
+    async_add_entities(switchs)
 
-class KeeneticWiFiSwitch(CoordinatorEntity, SwitchEntity):
-    """Representation of a Keenetic WiFi switch."""
+
+class KeeneticSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], SwitchEntity):
+
+    entity_description: KeeneticSwitchEntityDescription
+    _attr_has_entity_name = True
 
     def __init__(
-            self,
-            coordinator: DataUpdateCoordinator,
-            ap_id: str,
-            config_entry: ConfigEntry,
-            api,
-        ) -> None:
-            """Initialize the WiFi switch."""
-            super().__init__(coordinator)
-            self._ap_id = ap_id
-            self._config_entry = config_entry
-            self._api = api
-            
-            ap_data = self.coordinator.data["interface"][ap_id]
-            ssid = ap_data.get("ssid", "")
-            
-            is_5ghz = "WifiMaster1" in ap_id
-            is_guest = "AccessPoint1" in ap_id
-            is_iot = "AccessPoint2" in ap_id
-            
-            prefix = "5GHz" if is_5ghz else "2.4GHz"
-            self._attr_name = f"{ssid} ({prefix})"
-                
-            self._attr_unique_id = f"{config_entry.entry_id}_wifi_{ap_id}"
-            self.entity_id = f"switch.keenetic_wifi_{ap_id.lower().replace('/', '_')}"
-            
-            self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, config_entry.entry_id)},
-                name=f"Keenetic {coordinator.data.get('device', 'Router')}",
-                manufacturer=coordinator.data.get('manufacturer', MANUFACTURER),
-                model=coordinator.data.get('model', 'Router'),
-                sw_version=coordinator.data.get('firmware_version', ''),
-                hw_version=coordinator.data.get('hardware_version', ''),
-            )
-    
+        self,
+        coordinator: KeeneticSwitchEntityDescription,
+        entity_description: KeeneticSwitchEntityDescription,
+        label_sw,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = entity_description
+        self._label_sw = label_sw
+        self._attr_translation_key = self.entity_description.key
+        self._attr_unique_id = f"{coordinator.unique_id}_{self._attr_translation_key}_{self._label_sw}"
+        self._attr_device_info = coordinator.device_info
+        if self.entity_description.placeholder:
+            self._attr_translation_placeholders = {
+                self.entity_description.placeholder: label_sw
+            }
+
     @property
     def is_on(self) -> bool:
-        """Return true if WiFi network is enabled."""
-        if self.coordinator.data is None:
-            return False
-            
-        ap_data = self.coordinator.data["interface"].get(self._ap_id, {})
-        return ap_data.get("up", False)
-    
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the state attributes."""
-        if self.coordinator.data is None:
-            return {}
-            
-        ap_data = self.coordinator.data["interface"].get(self._ap_id, {})
+        return bool(self.entity_description.is_on_func(self.coordinator, self._label_sw))
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self.entity_description.on_func(self.coordinator, self._label_sw)
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self.entity_description.off_func(self.coordinator, self._label_sw)
+        await self.coordinator.async_request_refresh()
+
+
+class KeeneticInterfaceSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], SwitchEntity):
+    def __init__(
+        self,
+        coordinator: KeeneticRouterCoordinator,
+        data_interface,
+        name_interface
+    ) -> None:
+        """Initialize the Keenetic Interface switch."""
+        super().__init__(coordinator)
+        self._id_interface = data_interface['id']
+        self._name_interface = name_interface
         
-        wifi_password = (
-            ap_data.get("authentication", {})
-            .get("wpa-psk", {})
-            .get("psk", "")
-        )
-        
-        return {
-            "mac": ap_data.get("mac", ""),
-            "ssid": ap_data.get("ssid", ""),
-            "encryption": ap_data.get("encryption", ""),
-            "interface_name": ap_data.get("interface-name", ""),
-            "description": ap_data.get("description", ""),
-            "connected": ap_data.get("connected", "no"),
-            "type": ap_data.get("type", ""),
-            "password": ap_data.get("password", ""),
+        if self._id_interface.startswith('WifiMaster'):
+            self._attr_translation_key = "interface_wifi"
+            
+            ssid = data_interface.get('ssid', '')
+            if not ssid and 'AccessPoint' in self._id_interface:
+                clean_name = self._name_interface
+                prefixes_to_remove = ['WiFi ', 'Wifi ']
+                suffixes_to_remove = [' 2.4G', ' 5G', ' 2.4GHz', ' 5GHz']
+                
+                for prefix in prefixes_to_remove:
+                    if clean_name.startswith(prefix):
+                        clean_name = clean_name[len(prefix):]
+                
+                for suffix in suffixes_to_remove:
+                    if clean_name.endswith(suffix):
+                        clean_name = clean_name[:-len(suffix)]
+                
+                ssid = clean_name
+            
+            is_5ghz = 'WifiMaster1' in self._id_interface
+            prefix = '(5GHz)' if is_5ghz else '(2.4GHz)'
+            
+            self._display_name = f"{ssid} {prefix}"
+            
+        elif self._id_interface.startswith('Wireguard'):
+            self._attr_translation_key = "interface_wireguard"
+            self._display_name = self._name_interface
+        else:
+            self._attr_translation_key = "interface"
+            self._display_name = self._name_interface
+            
+        self._attr_unique_id = f"{coordinator.unique_id}_{self._attr_translation_key}_{self._id_interface}"
+        self._attr_device_info = coordinator.device_info
+        self._attr_translation_placeholders = {
+            "name_interface": self._display_name
         }
 
     @property
-    def is_on(self) -> bool:
-        """Return true if WiFi network is enabled."""
-        if self.coordinator.data is None:
-            return False
-            
-        ap_data = self.coordinator.data["interface"].get(self._ap_id, {})
-        return ap_data.get("up", False) is True
+    def name(self) -> str:
+        """Return the display name of this entity."""
+        return self._display_name
 
     @property
-    def icon(self) -> str:
-        """Return the icon to use in the frontend."""
-        return ICON_WIFI if self.is_on else ICON_WIFI_OFF
+    def is_on(self) -> bool:
+        """Return state."""
+        return self.coordinator.data.show_interface[self._id_interface]['state'] == "up"
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn on the WiFi network."""
-        try:
-            await self._api.enable_wifi(self._ap_id)
-            await self.coordinator.async_request_refresh()
-        except Exception as ex:
-            _LOGGER.error("Failed to turn on WiFi network %s: %s", self._ap_id, str(ex))
+        """Turn on."""
+        await self.coordinator.router.turn_on_off_interface(self._id_interface, 'up')
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off the WiFi network."""
-        try:
-            await self._api.disable_wifi(self._ap_id)
-            await self.coordinator.async_request_refresh()
-        except Exception as ex:
-            _LOGGER.error("Failed to turn off WiFi network %s: %s", self._ap_id, str(ex))
+        """Turn off."""
+        await self.coordinator.router.turn_on_off_interface(self._id_interface, 'down')
+        await self.coordinator.async_request_refresh()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the state attributes."""
+        interface_data = self.coordinator.data.show_interface[self._id_interface]
+        attributes = {
+            "interface_type": self._id_interface,
+        }
+        
+        if self._id_interface.startswith('WifiMaster'):
+            current_ssid = interface_data.get('ssid', '')
+            attributes.update({
+                "ssid": current_ssid or self._display_name.split(' (')[0],
+                "band": '5GHz' if 'WifiMaster1' in self._id_interface else '2.4GHz',
+                "description": interface_data.get('description', '')
+            })
+        
+        return attributes
+
+
+class KeeneticPortForwardingSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], SwitchEntity):
+
+    _attr_translation_key="port_forwarding"
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: KeeneticRouterCoordinator,
+        port_frw,
+    ) -> None:
+        """Initialize the Keenetic PortForwarding switch."""
+        super().__init__(coordinator)
+        self._pfrw = port_frw
+        self._pfrw_index = port_frw.index
+        self._pfrw_name = port_frw.name
+        self._attr_unique_id = f"{coordinator.unique_id}_{self._attr_translation_key}_{self._pfrw_index}"
+        self._attr_device_info = coordinator.device_info
+        self._attr_translation_placeholders = {"pfrw_name": f"{self._pfrw_name}"}
+
+    @property
+    def is_on(self) -> bool:
+        """Return state."""
+        return self.coordinator.data.show_rc_ip_static[self._pfrw_index].disable == False
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn on."""
+        await self.coordinator.router.turn_on_off_port_forwarding(self._pfrw_index, True)
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off."""
+        await self.coordinator.router.turn_on_off_port_forwarding(self._pfrw_index, False)
+        await self.coordinator.async_request_refresh()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, StateType]:
+        """Return the state attributes."""
+        return {
+            "interface": self._pfrw.interface,
+            "protocol": self._pfrw.protocol,
+            "port": self._pfrw.port,
+            "end_port": self._pfrw.end_port,
+            "to_host": self._pfrw.to_host,
+            "index": self._pfrw.index,
+            "comment": self._pfrw.comment,
+        }

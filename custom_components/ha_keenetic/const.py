@@ -1,60 +1,39 @@
-"""Constants for the Keenetic integration."""
-from datetime import timedelta
+"""The Keenetic API constants."""
 
-DOMAIN = "ha_keenetic"
-MANUFACTURER = "Keenetic"
+from typing import Final
 
-# Configuration
-CONF_HOST = "host"
-CONF_PORT = "port"
-CONF_USERNAME = "username"
-CONF_PASSWORD = "password"
+DOMAIN: Final = "ha_keenetic"
 
-# Defaults
-DEFAULT_HOST = "192.168.1.1"
-DEFAULT_PORT = 81
-DEFAULT_USERNAME = "admin"
-DEFAULT_SCAN_INTERVAL = 30
+MIN_SCAN_INTERVAL: Final = 1
+DEFAULT_SCAN_INTERVAL: Final = 30
+REQUEST_TIMEOUT: Final = 30
+SCAN_INTERVAL_FIREWARE: Final = 1800
 
-# Error messages
-ERROR_CANNOT_CONNECT = "cannot_connect"
-ERROR_INVALID_AUTH = "invalid_auth"
-ERROR_UNKNOWN = "unknown"
+COORD_FULL: Final = "coordinator_full"
+COORD_FIREWARE: Final = "coordinator_firmware"
+COORD_RC_INTERFACE: Final = "coordinator_rc_interface"
 
-# API endpoints
-API_SYSTEM = "/rci/show/system"
-API_VERSION = "/rci/show/version"
-API_INTERFACE = "/rci/show/interface"
-API_MESH = "/rci/show/mws/member"
+CONF_CLIENTS_SELECT_POLICY: Final = "cliens_select_policy"
+CONF_CREATE_ALL_CLIENTS_POLICY: Final = "create_entity_all_cliens_button_policy"
+CONF_CREATE_IMAGE_QR: Final = "create_image_qr"
+CONF_CREATE_PORT_FRW: Final = "create_entity_port_forwarding"
+CONF_BACKUP_TYPE_FILE: Final = "backup_type_file"
 
-# Update interval
-UPDATE_INTERVAL = timedelta(seconds=30)
+CONF_CREATE_DT: Final = "create_device_tracker"
+CONF_SELECT_CREATE_DT: Final = "create_select_device_tracker"
 
-# Interface types
-INTERFACE_TYPE_WAN = "wan"
-INTERFACE_TYPE_PORT = "port"
-INTERFACE_TYPE_BRIDGE = "bridge"
+FW_SANDBOX: Final = {
+    "stable": "main",
+    "preview": "preview",
+    "draft": "dev"
+}
 
-# Interface traits
-TRAIT_ETHERNET = "EthernetPort"
-TRAIT_GIGABIT = "GigabitEthernetPort"
+POLICY_DEFAULT: Final = "default"
+POLICY_NOT_INTERNET: Final = "not_internet"
 
-# State attributes
-ATTR_INTERFACE_ID = "interface_id"
-ATTR_INTERFACE_TYPE = "type"
-ATTR_INTERFACE_DESCRIPTION = "description"
-ATTR_INTERFACE_TRAITS = "traits"
-ATTR_INTERFACE_ATTRIBUTES = "attributes"
+CROUTER: Final = "client_router"
 
-# Mesh constants
-MESH_NODE_PREFIX = "mesh_node_"
+DEFAULT_BACKUP_TYPE_FILE: Final = ["config"]
 
-# Platforms
-PLATFORMS = ["sensor", "switch"]
-
-
-CONF_ENABLE_MESH = "enable_mesh"
-CONF_UPDATE_INTERVAL = "update_interval"
-
-DEFAULT_ENABLE_MESH = True
-DEFAULT_UPDATE_INTERVAL = 30
+COUNT_REPEATED_REQUEST_FIREWARE: Final = 30
+TIMER_REPEATED_REQUEST_FIREWARE: Final = 0.3

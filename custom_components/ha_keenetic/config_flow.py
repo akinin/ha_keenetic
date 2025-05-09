@@ -1,180 +1,214 @@
-"""Config flow for Keenetic integration."""
-from typing import Any
+"""The Keenetic API Config flow."""
+
 import logging
-from urllib.parse import urlparse
+import voluptuous as vol
+from typing import Any
+import operator
+
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import callback
+import homeassistant.helpers.config_validation as cv
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
-import voluptuous as vol
+from homeassistant.helpers.device_registry import format_mac
+from homeassistant.const import (
+    CONF_HOST,
+    CONF_PASSWORD,
+    CONF_SCAN_INTERVAL,
+    CONF_SSL,
+    CONF_VERIFY_SSL,
+    CONF_USERNAME,
+    CONF_PORT,
+)
 
+from . import get_api
 from .const import (
     DOMAIN,
-    CONF_HOST,
-    CONF_USERNAME,
-    CONF_PASSWORD,
-    CONF_PORT,
-    CONF_ENABLE_MESH,
-    CONF_UPDATE_INTERVAL,
-    DEFAULT_HOST,
-    DEFAULT_PORT,
-    DEFAULT_USERNAME,
-    DEFAULT_ENABLE_MESH,
-    DEFAULT_UPDATE_INTERVAL,
-    ERROR_CANNOT_CONNECT,
-    ERROR_INVALID_AUTH,
-    ERROR_UNKNOWN,
-    MANUFACTURER,
+    COORD_FULL,
 )
-from .api import KeeneticAPI
+from .keenetic import Router
+from .const import (
+    DEFAULT_SCAN_INTERVAL, 
+    MIN_SCAN_INTERVAL,
+    CONF_CLIENTS_SELECT_POLICY,
+    CONF_CREATE_ALL_CLIENTS_POLICY,
+    CONF_CREATE_IMAGE_QR,
+    CONF_CREATE_DT,
+    CONF_CREATE_PORT_FRW,
+    DEFAULT_BACKUP_TYPE_FILE,
+    CONF_BACKUP_TYPE_FILE,
+    CONF_SELECT_CREATE_DT,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
-class CannotConnect(HomeAssistantError):
-    """Error to indicate we cannot connect."""
 
-class InvalidAuth(HomeAssistantError):
-    """Error to indicate there is invalid auth."""
+STEP_USER_DATA_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_USERNAME, default='admin'): cv.string,
+        vol.Required(CONF_PASSWORD, default=''): cv.string,
+        vol.Required(CONF_HOST, default='http://192.168.1.1'): str,
+        vol.Required(CONF_PORT, default=80): int,
+        vol.Required(CONF_SSL, default=False): bool,
+    }
+)
 
-class KeeneticConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Keenetic."""
 
-    VERSION = 1
+class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
-    def __init__(self) -> None:
-        """Initialize the config flow."""
-        self.discovered_host: str | None = None
-
-    async def async_validate_input(self, data: dict) -> bool:
-        """Validate the user input allows us to connect."""
-        try:
-            api = KeeneticAPI(
-                host=data[CONF_HOST],
-                username=data[CONF_USERNAME],
-                password=data[CONF_PASSWORD],
-                port=data[CONF_PORT],
-            )
-            
-            if not await api.authenticate():
-                raise InvalidAuth
-
-            system_info = await api.get_system_info()
-            if not system_info:
-                raise CannotConnect
-
-            return True
-
-        except InvalidAuth:
-            raise InvalidAuth
-        except Exception as error:
-            _LOGGER.exception("Unexpected exception")
-            raise CannotConnect from error
-
-    async def async_step_ssdp(self, discovery_info: SsdpServiceInfo) -> FlowResult:
-        """Handle a discovered Keenetic router."""
-        hostname = urlparse(discovery_info.ssdp_location).hostname
-        if not hostname:
-            return self.async_abort(reason="no_host")
-
-        await self.async_set_unique_id(discovery_info.upnp.get("serialNumber", hostname))
-        self._abort_if_unique_id_configured(updates={CONF_HOST: hostname})
-
-        self.discovered_host = hostname
-        
-        self.context["title_placeholders"] = {
-            "name": discovery_info.upnp.get("friendlyName", "Keenetic Router"),
-            "host": hostname
-        }
-
-        return await self.async_step_user()
-
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_user(self, user_input=None):
         """Handle the initial step."""
         errors = {}
-
+        title = ""
         if user_input is not None:
             try:
-                user_input[CONF_HOST] = self.discovered_host or user_input[CONF_HOST]
-                
-                await self.async_validate_input(user_input)
+                router = await get_api(self.hass, user_input)
+                keen = await router.show_version()
 
-                user_input[CONF_ENABLE_MESH] = DEFAULT_ENABLE_MESH
-                user_input[CONF_UPDATE_INTERVAL] = DEFAULT_UPDATE_INTERVAL
+                title = f"{keen['vendor']} {keen['model']} {user_input['host']}"
 
-                return self.async_create_entry(
-                    title=f"Keenetic ({user_input[CONF_HOST]})",
-                    data=user_input,
-                )
+            except Exception as error:
+                _LOGGER.error('Keenetic Api Integration Exception - {}'.format(error))
+                errors['base'] = str(error)
+            if title != "":
+                unique_id: str = f"{keen['vendor']} {keen['device']} {format_mac(router.mac)[-8:].replace(':', '')}"
+                await self.async_set_unique_id(unique_id)
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(title=title, data=user_input)
 
-            except CannotConnect:
-                errors["base"] = ERROR_CANNOT_CONNECT
-            except InvalidAuth:
-                errors["base"] = ERROR_INVALID_AUTH
-            except Exception:
-                _LOGGER.exception("Unexpected exception")
-                errors["base"] = ERROR_UNKNOWN
-
-        default_host = self.discovered_host or DEFAULT_HOST
-
-        return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_HOST, default=default_host): str,
-                    vol.Required(CONF_USERNAME, default=DEFAULT_USERNAME): str,
-                    vol.Required(CONF_PASSWORD): str,
-                    vol.Required(CONF_PORT, default=DEFAULT_PORT): vol.All(
-                        vol.Coerce(int), 
-                        vol.Range(min=1, max=65535)
-                    ),
-                }
-            ),
-            errors=errors,
-        )
-
+        return self.async_show_form(step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors)
 
     @staticmethod
     @callback
-    def async_get_options_flow(
-        config_entry: config_entries.ConfigEntry
-    ) -> config_entries.OptionsFlow:
-        """Get the options flow for this handler."""
-        return KeeneticOptionsFlow(config_entry)
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry) -> config_entries.OptionsFlow:
+        return OptionsFlow(config_entry)
 
 
-class KeeneticOptionsFlow(config_entries.OptionsFlow):
-    """Handle options."""
+class OptionsFlow(config_entries.OptionsFlow):
+    """Handle a options flow for Keenetic."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
+    def __init__(self, config_entry):
+        """Initialize Keenetic options flow."""
         self.config_entry = config_entry
+        self._options = dict(config_entry.options)
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Manage the options."""
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+    ) -> config_entries.ConfigFlowResult:
+        if self.config_entry.entry_id not in self.hass.data[DOMAIN]:
+            return self.async_abort(reason="integration_not_setup")
+        self.router = self.hass.data[DOMAIN][self.config_entry.entry_id][COORD_FULL].router
 
-        options = self.config_entry.options
+        if self.router.hw_type != "router":
+            return await self.async_step_configure_other()
+
+        return await self.async_step_configure_router()
+
+
+    async def async_step_configure_router(
+        self, 
+        user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        if user_input is not None:
+            self._options.update(user_input)
+            return self.async_create_entry(title="", data=self._options)
+
+        data_clients = await self.router.show_ip_hotspot()
+        _LOGGER.debug(f'CONF_CLIENTS_SELECT_POLICY - {self._options.get(CONF_CLIENTS_SELECT_POLICY, [])}')
+        clients = {
+            client['mac']: f"{client['name'] or client['hostname']} ({client['mac']})"
+            for client in data_clients
+        }
+        clients_policy = clients
+        clients_policy |= {
+            mac: f"Unknown ({mac})"
+            for mac in self._options.get(CONF_CLIENTS_SELECT_POLICY, [])
+            if mac not in clients
+        }
+        clients_dt = clients
+        clients_dt |= {
+            mac: f"Unknown ({mac})"
+            for mac in self._options.get(CONF_SELECT_CREATE_DT, [])
+            if mac not in clients
+        }
+
         return self.async_show_form(
-            step_id="init",
+            step_id="configure_router",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_ENABLE_MESH,
-                        default=options.get(CONF_ENABLE_MESH, DEFAULT_ENABLE_MESH),
+                    vol.Optional(
+                        CONF_SCAN_INTERVAL,
+                        default=self._options.get(
+                            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+                        ),
+                    ): vol.All(cv.positive_int, vol.Clamp(min=MIN_SCAN_INTERVAL)),
+                    vol.Optional(
+                        CONF_CREATE_IMAGE_QR,
+                        default=self._options.get(
+                            CONF_CREATE_IMAGE_QR, False
+                        ),
                     ): bool,
-                    vol.Required(
-                        CONF_UPDATE_INTERVAL,
-                        default=options.get(CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL),
-                    ): vol.All(
-                        vol.Coerce(int),
-                        vol.Range(min=10, max=300)
+                    vol.Optional(
+                        CONF_CREATE_ALL_CLIENTS_POLICY,
+                        default=self._options.get(
+                            CONF_CREATE_ALL_CLIENTS_POLICY, False
+                        ),
+                    ): bool,
+                    vol.Optional(
+                        CONF_CLIENTS_SELECT_POLICY,
+                        default=self._options.get(CONF_CLIENTS_SELECT_POLICY, []),
+                    ): cv.multi_select(
+                        dict(sorted(clients_policy.items(), key=operator.itemgetter(1)))
                     ),
+                    vol.Optional(
+                        CONF_CREATE_DT,
+                        default=self._options.get(
+                            CONF_CREATE_DT, False
+                        ),
+                    ): bool,
+                    vol.Optional(
+                        CONF_SELECT_CREATE_DT,
+                        default=self._options.get(CONF_SELECT_CREATE_DT, []),
+                    ): cv.multi_select(
+                        dict(sorted(clients_dt.items(), key=operator.itemgetter(1)))
+                    ),
+                    vol.Optional(
+                        CONF_CREATE_PORT_FRW,
+                        default=self._options.get(
+                            CONF_CREATE_PORT_FRW, False
+                        ),
+                    ): bool,
+                    vol.Optional(
+                        CONF_BACKUP_TYPE_FILE,
+                        default=self._options.get(CONF_BACKUP_TYPE_FILE, DEFAULT_BACKUP_TYPE_FILE),
+                    ): cv.multi_select([
+                        "config",
+                        "firmware",
+                    ]),
                 }
             ),
+            last_step=False,
+        )
+
+    async def async_step_configure_other(
+        self, 
+        user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        if user_input is not None:
+            self._options.update(user_input)
+            return self.async_create_entry(title="", data=self._options)
+
+        return self.async_show_form(
+            step_id="configure_other",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_SCAN_INTERVAL,
+                        default=self._options.get(
+                            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+                        ),
+                    ): vol.All(cv.positive_int, vol.Clamp(min=MIN_SCAN_INTERVAL))
+                }
+            ),
+            last_step=False,
         )
