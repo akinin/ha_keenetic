@@ -150,19 +150,22 @@ SENSORS_STAT_INTERFACE: tuple[KeeneticRouterSensorEntityDescription, ...] = (
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry, 
+    entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback
 ) -> None:
+    """Set up the Keenetic sensor."""
     coordinator = hass.data[DOMAIN][entry.entry_id][COORD_FULL]
-
     sensors = []
+    
+    # Добавляем сенсоры из SENSOR_TYPES
     for description in SENSOR_TYPES:
         try:
             if description.value(coordinator, description.key) is not None:
                 sensors.append(KeeneticRouterSensor(coordinator, description, description.key, description.key))
         except Exception as err:
             _LOGGER.debug(f'async_setup_entry sensor SENSOR_TYPES {description} err - {err}')
-
+    
+    # Добавляем сенсоры для интерфейсов
     for interface, data_interface in coordinator.data.show_interface.items():
         if interface in coordinator.router.request_interface:
             new_name = coordinator.router.request_interface[interface]
@@ -171,8 +174,104 @@ async def async_setup_entry(
                     sensors.append(KeeneticRouterSensor(coordinator, description, interface, new_name))
                 except Exception as err:
                     _LOGGER.debug(f'async_setup_entry sensor SENSORS_STAT_INTERFACE {description} err - {err}')
-
+    
+    # Добавляем сенсоры для Mesh-узлов
+    if coordinator.router.hw_type == "router":
+        try:
+            _LOGGER.debug("Attempting to get mesh nodes")
+            mesh_nodes = await coordinator.router.get_mesh_nodes()
+            _LOGGER.debug("Got mesh nodes: %s", mesh_nodes)
+            
+            if mesh_nodes:
+                for node_id, node_data in mesh_nodes.items():
+                    _LOGGER.debug("Creating sensor for mesh node: %s", node_id)
+                    sensors.append(
+                        KeeneticMeshNodeSensor(
+                            coordinator,
+                            node_id,
+                            node_data,
+                        )
+                    )
+                _LOGGER.debug("Created %d mesh node sensors", len(mesh_nodes))
+            else:
+                _LOGGER.debug("No mesh nodes found")
+        except Exception as ex:
+            _LOGGER.error(f"Error setting up mesh node sensors: {ex}", exc_info=True)
+    
     async_add_entities(sensors, False)
+
+class KeeneticMeshNodeSensor(CoordinatorEntity[KeeneticRouterCoordinator], SensorEntity):
+    """Representation of a Keenetic Mesh Node sensor."""
+    
+    _attr_has_entity_name = True
+    MESH_NODE_PREFIX = "mesh_node_"
+    
+    def __init__(
+        self,
+        coordinator: KeeneticRouterCoordinator,
+        node_id: str,
+        node_data: dict,
+    ) -> None:
+        """Initialize the mesh node sensor."""
+        super().__init__(coordinator)
+        self._node_id = node_id
+        self._node_data = node_data
+        
+        model = node_data.get("model", "")
+        known_host = node_data.get("known-host", "") or node_data.get("known_host", "")
+        
+        # Формируем имя для отображения БЕЗ префикса "Mesh"
+        if known_host:
+            display_name = f"{model}"
+        else:
+            display_name = f"Node {node_id}"
+        
+        # Вариант 1: Используем только _attr_name без translation_key
+        self._attr_name = f"Mesh {display_name}"
+        self._attr_translation_key = None  # Отключаем использование translation_key
+        self._attr_translation_placeholders = None
+        
+        self._attr_unique_id = f"{coordinator.unique_id}_{self.MESH_NODE_PREFIX}{node_id}"
+        
+        # Для совместимости со старыми entity_id
+        self.entity_id = f"sensor.keenetic_{self.MESH_NODE_PREFIX}{node_id.replace(':', '_')}"
+        
+        self._attr_device_info = coordinator.device_info
+    
+    @property
+    def icon(self) -> str:
+        """Return the icon of the sensor."""
+        ICON_MESH_NODE = "mdi:access-point"
+        ICON_MESH_NODE_OFFLINE = "mdi:access-point-off"
+        
+        # Используем данные, которые уже есть в _node_data
+        return ICON_MESH_NODE if self._node_data.get("status") == "connected" else ICON_MESH_NODE_OFFLINE
+    
+    @property
+    def native_value(self):
+        """Return the state of the sensor."""
+        # Используем данные, которые уже есть в _node_data
+        return self._node_data.get("status", "unknown")
+    
+    @property
+    def extra_state_attributes(self):
+        """Return the state attributes."""
+        # Используем данные, которые уже есть в _node_data
+        attributes = self._node_data.get("attributes", {})
+        
+        result = {
+            "ip_address": attributes.get("ip", ""),
+            "mode": attributes.get("mode", ""),
+            "hw_id": attributes.get("hw_id", ""),
+            "firmware": attributes.get("firmware", ""),
+            "firmware_available": attributes.get("firmware_available", ""),
+            "memory": attributes.get("memory", ""),
+            "uptime": attributes.get("uptime", ""),
+            "cloud_state": attributes.get("cloud_agent_state", ""),
+            "internet_available": attributes.get("internet_available", False),
+        }
+        
+        return result
 
 class KeeneticRouterSensor(CoordinatorEntity[KeeneticRouterCoordinator], SensorEntity):
     _attr_has_entity_name = True

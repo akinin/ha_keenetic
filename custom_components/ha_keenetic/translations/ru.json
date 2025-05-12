@@ -88,12 +88,6 @@
       }
     },
     "sensor": {
-      "hostname": {
-        "name": "Hostname"
-      },
-      "domainname": {
-        "name": "Domain Name"
-      },
       "cpuload": {
         "name": "Загрузка процессора"
       },
@@ -102,6 +96,12 @@
       },
       "uptime": {
         "name": "Время запуска"
+      },
+      "temperature_2_4g": {
+        "name": "Температура 2.4g чипа"
+      },
+      "temperature_5g": {
+        "name": "Температура 5g чипа"
       },
       "clients_wifi": {
         "name": "Клиентов WiFi"
@@ -147,12 +147,6 @@
       }
     },
     "switch": {
-      "interface_wifi": {
-        "name": "{name_interface}"
-      },
-      "interface_wireguard": {
-        "name": "{name_interface}"
-      },
       "interface": {
         "name": "{name_interface}"
       },

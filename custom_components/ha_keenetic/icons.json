@@ -1,14 +1,14 @@
 {
     "entity": {
         "switch": {
-            "interface_wifi": {
+            "wifi_interface": {
                 "default": "mdi:wifi",
                 "state": {
                     "off": "mdi:wifi-off",
                     "on": "mdi:wifi"
                 }
             },
-            "interface_wireguard": {
+            "vpn_interface": {
                 "default": "mdi:vpn",
                 "state": {
                     "off": "mdi:cancel",
@@ -36,7 +36,7 @@
                     "on": "mdi:web"
                 }
             },
-            "power_usb": {
+            "usb_port": {
                 "default": "mdi:usb-flash-drive",
                 "state": {
                     "off": "mdi:usb-flash-drive-outline",

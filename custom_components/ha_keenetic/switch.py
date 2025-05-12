@@ -43,44 +43,69 @@ SWITCH_TYPES: tuple[KeeneticSwitchEntityDescription, ...] = (
         on_func=lambda coordinator, label_sw: coordinator.router.turn_on_off_web_configurator_access(True),
         off_func=lambda coordinator, label_sw: coordinator.router.turn_on_off_web_configurator_access(False),
     ),
-    KeeneticSwitchEntityDescription(
-        key="power_usb",
-        is_on_func=lambda coordinator, label_sw: coordinator.data.show_rc_system_usb[int(label_sw)-1].get('power', False) == False, # ЧЗХ
-        on_func=lambda coordinator, label_sw: coordinator.router.turn_on_off_usb(True, label_sw),
-        off_func=lambda coordinator, label_sw: coordinator.router.turn_on_off_usb(False, label_sw),
-        placeholder="number",
-    ),
 )
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback,) -> None:
 
     coordinator: KeeneticRouterCoordinator = hass.data[DOMAIN][entry.entry_id][COORD_FULL]
     switchs: list[SwitchEntity] = []
+    
     if coordinator.router.hw_type == "router":
-        rc_interface: DataRcInterface = hass.data[DOMAIN][entry.entry_id][COORD_RC_INTERFACE].data
-
-        interfaces = coordinator.data.show_interface
-        for interface, data_interface in interfaces.items():
-            if ((data_interface.get('usedby', False)
-                and (interface.startswith('WifiMaster0') 
-                    or interface.startswith('WifiMaster1')))):
+        # Получаем информацию о Ethernet портах
+        try:
+            ethernet_ports = await coordinator.router.get_ethernet_ports()
+            for port_id, port_data in ethernet_ports.items():
                 switchs.append(
-                    KeeneticInterfaceSwitchEntity(
+                    KeeneticEthernetPortSwitchEntity(
                         coordinator,
-                        data_interface,
-                        rc_interface[interface].name_interface,
+                        port_data,
                     )
                 )
-            elif interface in coordinator.router.request_interface:
-                new_name = coordinator.router.request_interface[interface]
+        except Exception as ex:
+            _LOGGER.error(f"Error setting up ethernet port switches: {ex}")
+        
+        # Получаем информацию о USB портах
+        try:
+            usb_ports = await coordinator.router.get_usb_ports()
+            for port_id, port_data in usb_ports.items():
                 switchs.append(
-                    KeeneticInterfaceSwitchEntity(
+                    KeeneticUsbPortSwitchEntity(
                         coordinator,
-                        data_interface,
-                        new_name,
+                        port_data,
                     )
                 )
+        except Exception as ex:
+            _LOGGER.error(f"Error setting up USB port switches: {ex}")
+            
+        # Получаем информацию о WiFi интерфейсах
+        try:
+            wifi_interfaces = await coordinator.router.get_wifi_interfaces()
+            for interface_id, interface_data in wifi_interfaces.items():
+                # Создаем только для точек доступа, не для мастер-интерфейсов
+                if '/AccessPoint' in interface_id and interface_data.get('ssid'):
+                    switchs.append(
+                        KeeneticWiFiSwitchEntity(
+                            coordinator,
+                            interface_data,
+                        )
+                    )
+        except Exception as ex:
+            _LOGGER.error(f"Error setting up WiFi interface switches: {ex}")
+            
+        # Получаем информацию о VPN интерфейсах
+        try:
+            vpn_interfaces = await coordinator.router.get_vpn_interfaces()
+            for interface_id, interface_data in vpn_interfaces.items():
+                switchs.append(
+                    KeeneticVpnSwitchEntity(
+                        coordinator,
+                        interface_data,
+                    )
+                )
+        except Exception as ex:
+            _LOGGER.error(f"Error setting up VPN interface switches: {ex}")
 
+        # Добавляем переадресацию портов
         if entry.options.get(CONF_CREATE_PORT_FRW, False):
             port_forwardings = coordinator.data.show_rc_ip_static
             for index, port_frw in port_forwardings.items():
@@ -91,16 +116,314 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                     )
                 )
 
+    # Добавляем остальные переключатели
     for description in SWITCH_TYPES:
-        if description.key == "power_usb":
-            for row in coordinator.data.show_rc_system_usb:
-                switchs.append(KeeneticSwitchEntity(coordinator, description, row['port']))
-        else:
-            if coordinator.router.hw_type == "router":
-                switchs.append(KeeneticSwitchEntity(coordinator, description, description.key))
+        if coordinator.router.hw_type == "router":
+            switchs.append(KeeneticSwitchEntity(coordinator, description, description.key))
 
     async_add_entities(switchs)
 
+
+
+class KeeneticWiFiSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], SwitchEntity):
+    """Keenetic WiFi switch entity."""
+    
+    _attr_has_entity_name = True
+    
+    def __init__(
+        self,
+        coordinator: KeeneticRouterCoordinator,
+        interface_data,
+    ) -> None:
+        """Initialize the Keenetic WiFi switch."""
+        super().__init__(coordinator)
+        self._interface_data = interface_data
+        self._id = interface_data["id"]
+        self._ssid = interface_data["ssid"]
+        self._band = interface_data["band"]
+        self._password = interface_data.get("password", "")
+        self._encryption = interface_data.get("encryption", {})
+        self._interface_name = interface_data.get("interface-name", "")
+        self._description = interface_data.get("description", "")
+        self._connected = interface_data.get("connected", "no")
+        
+        # Формируем имя для отображения
+        self._attr_name = f"{self._ssid} ({self._band})"
+        self._attr_translation_key = "wifi_interface"
+            
+        self._attr_unique_id = f"{coordinator.unique_id}_wifi_{self._id}"
+        self._attr_device_info = coordinator.device_info
+        self._attr_translation_placeholders = {
+            "name_interface": self._attr_name
+        }
+    
+    @property
+    def is_on(self) -> bool:
+        """Return state."""
+        try:
+            # Проверяем состояние WiFi интерфейса
+            for interface_id, interface_data in self.coordinator.data.show_interface.items():
+                if interface_id == self._id:
+                    return interface_data.get('state', 'down') == 'up'
+            return False
+        except Exception as ex:
+            _LOGGER.error(f"Error getting WiFi interface state: {ex}")
+            return False
+    
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn on the WiFi interface."""
+        try:
+            await self.coordinator.router.turn_on_off_interface(self._id, 'up')
+            await self.coordinator.async_request_refresh()
+        except Exception as ex:
+            _LOGGER.error(f"Error turning on WiFi interface {self._id}: {ex}")
+    
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off the WiFi interface."""
+        try:
+            await self.coordinator.router.turn_on_off_interface(self._id, 'down')
+            await self.coordinator.async_request_refresh()
+        except Exception as ex:
+            _LOGGER.error(f"Error turning off WiFi interface {self._id}: {ex}")
+    
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the state attributes."""
+        attributes = {
+            "interface_id": self._id,
+            "ssid": self._ssid,
+            "band": self._band,
+            "password": self._password,
+            "encryption": self._encryption,
+            "interface_name": self._interface_name,
+            "description": self._description,
+            "connected": self._connected
+        }
+        
+        # Добавляем все атрибуты из interface_data
+        if "attributes" in self._interface_data:
+            attributes.update(self._interface_data["attributes"])
+        
+        return attributes
+
+class KeeneticVpnSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], SwitchEntity):
+    """Keenetic VPN switch entity."""
+    
+    _attr_has_entity_name = True
+    
+    def __init__(
+        self,
+        coordinator: KeeneticRouterCoordinator,
+        interface_data,
+    ) -> None:
+        """Initialize the Keenetic VPN switch."""
+        super().__init__(coordinator)
+        self._interface_data = interface_data
+        self._id = interface_data["id"]
+        self._label = interface_data["label"]
+        self._vpn_type = interface_data.get("vpn_type", "VPN")
+        
+        self._attr_name = self._label
+        self._attr_translation_key = "vpn_interface"
+            
+        self._attr_unique_id = f"{coordinator.unique_id}_vpn_{self._id}"
+        self._attr_device_info = coordinator.device_info
+        self._attr_translation_placeholders = {
+            "name_interface": self._attr_name
+        }
+    
+    @property
+    def is_on(self) -> bool:
+        """Return state."""
+        try:
+            # Проверяем состояние VPN интерфейса
+            for interface_id, interface_data in self.coordinator.data.show_interface.items():
+                if interface_id == self._id:
+                    return interface_data.get('state', 'down') == 'up'
+            return False
+        except Exception as ex:
+            _LOGGER.error(f"Error getting VPN interface state: {ex}")
+            return False
+    
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn on the VPN interface."""
+        try:
+            await self.coordinator.router.turn_on_off_interface(self._id, 'up')
+            await self.coordinator.async_request_refresh()
+        except Exception as ex:
+            _LOGGER.error(f"Error turning on VPN interface {self._id}: {ex}")
+    
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off the VPN interface."""
+        try:
+            await self.coordinator.router.turn_on_off_interface(self._id, 'down')
+            await self.coordinator.async_request_refresh()
+        except Exception as ex:
+            _LOGGER.error(f"Error turning off VPN interface {self._id}: {ex}")
+    
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the state attributes."""
+        attributes = {
+            "interface_id": self._id,
+            "vpn_type": self._vpn_type,
+        }
+        
+        # Добавляем все атрибуты из interface_data
+        if "attributes" in self._interface_data:
+            attributes.update(self._interface_data["attributes"])
+        
+        return attributes
+
+class KeeneticUsbPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], SwitchEntity):
+    """Keenetic USB Port switch entity."""
+    
+    _attr_has_entity_name = True
+    
+    def __init__(
+        self,
+        coordinator: KeeneticRouterCoordinator,
+        port_data,
+    ) -> None:
+        """Initialize the Keenetic USB Port switch."""
+        super().__init__(coordinator)
+        self._port_data = port_data
+        self._id = port_data["id"]
+        self._port = port_data["port"]
+        
+        self._attr_name = port_data["label"]
+        self._attr_translation_key = "usb_port"
+            
+        self._attr_unique_id = f"{coordinator.unique_id}_usb_port_{self._port}"
+        self._attr_device_info = coordinator.device_info
+        self._attr_translation_placeholders = {
+            "name_port": self._attr_name
+        }
+    
+    @property
+    def is_on(self) -> bool:
+        """Return state."""
+        try:
+            # Проверяем состояние питания USB порта
+            for usb_port in self.coordinator.data.show_rc_system_usb:
+                if usb_port.get('port') == self._port:
+                    return not usb_port.get('power', {}).get('shutdown', False)
+            return False
+        except Exception as ex:
+            _LOGGER.error(f"Error getting USB port state: {ex}")
+            return False
+    
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn on the USB port."""
+        try:
+            await self.coordinator.router.turn_on_off_usb(True, self._port)
+            await self.coordinator.async_request_refresh()
+        except Exception as ex:
+            _LOGGER.error(f"Error turning on USB port {self._port}: {ex}")
+    
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off the USB port."""
+        try:
+            await self.coordinator.router.turn_on_off_usb(False, self._port)
+            await self.coordinator.async_request_refresh()
+        except Exception as ex:
+            _LOGGER.error(f"Error turning off USB port {self._port}: {ex}")
+    
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the state attributes."""
+        attributes = {
+            "port_id": self._port,
+        }
+        
+        # Добавляем все атрибуты из port_data
+        if "attributes" in self._port_data:
+            attributes.update(self._port_data["attributes"])
+        
+        return attributes
+
+class KeeneticEthernetPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], SwitchEntity):
+    """Keenetic Ethernet Port switch entity."""
+    
+    _attr_has_entity_name = True
+    
+    def __init__(
+        self,
+        coordinator: KeeneticRouterCoordinator,
+        port_data,
+    ) -> None:
+        """Initialize the Keenetic Ethernet Port switch."""
+        super().__init__(coordinator)
+        self._port_data = port_data
+        self._id = port_data["id"]
+        self._type = port_data["type"]
+        
+        # Определяем имя и translation_key в зависимости от типа порта
+        if self._type == "wan":
+            self._attr_name = "Port WAN"
+            self._attr_translation_key = "interface"
+        else:
+            self._attr_name = port_data["label"]
+            self._attr_translation_key = "interface"
+            
+        self._attr_unique_id = f"{coordinator.unique_id}_ethernet_port_{self._id}"
+        self._attr_device_info = coordinator.device_info
+        self._attr_translation_placeholders = {
+            "name_interface": self._attr_name
+        }
+    
+    @property
+    def is_on(self) -> bool:
+        """Return state."""
+        # Обновляем данные о порте при каждом запросе состояния
+        try:
+            # Здесь нужно получить актуальное состояние порта
+            # Можно использовать link == "up" как индикатор включенного состояния
+            for port_id, port_data in self.coordinator.data.show_interface.items():
+                if port_id == self._id or (self._type == "port" and port_id in self._id):
+                    return port_data.get("link", "down") == "up"
+            return False
+        except Exception as ex:
+            _LOGGER.error(f"Error getting port state: {ex}")
+            return False
+    
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn on the port."""
+        # Реализация включения порта
+        try:
+            port_id = self._id
+            if self._type == "port" and "_port_" in self._id:
+                port_id = self._id.split("_port_")[1]
+            await self.coordinator.router.turn_on_off_interface(port_id, 'up')
+            await self.coordinator.async_request_refresh()
+        except Exception as ex:
+            _LOGGER.error(f"Error turning on port {self._id}: {ex}")
+    
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off the port."""
+        # Реализация выключения порта
+        try:
+            port_id = self._id
+            if self._type == "port" and "_port_" in self._id:
+                port_id = self._id.split("_port_")[1]
+            await self.coordinator.router.turn_on_off_interface(port_id, 'down')
+            await self.coordinator.async_request_refresh()
+        except Exception as ex:
+            _LOGGER.error(f"Error turning off port {self._id}: {ex}")
+    
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the state attributes."""
+        attributes = {
+            "port_type": self._type,
+            "port_id": self._id,
+        }
+        
+        # Добавляем все атрибуты из port_data
+        if "attributes" in self._port_data:
+            attributes.update(self._port_data["attributes"])
+        
+        return attributes
 
 class KeeneticSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], SwitchEntity):
 
