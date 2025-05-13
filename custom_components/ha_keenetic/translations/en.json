@@ -1,81 +1,81 @@
 {
   "config": {
     "abort": {
-      "already_configured": "Устройство уже настроено!"
+      "already_configured": "Device is already configured!"
     },
     "step": {
       "user": {
         "data": {
-          "host": "Хост",
-          "port": "Порт",
-          "username": "Логин",
-          "password": "Пароль",
-          "ssl": "SSL сертификат",
-          "scan_interval": "Интервал скарирования (секунд)"
+          "host": "Host",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "ssl": "SSL certificate",
+          "scan_interval": "Scan interval (seconds)"
         },
-        "description": "Введите свои учетные данные Keenetic."
+        "description": "Enter your Keenetic credentials."
       }
     }
   },
   "options": {
     "abort": {
-      "not_supported_settings": "Дополнительные настройки доступны \n только для типа router! \n У вас {hw_type}"
+      "not_supported_settings": "Additional settings are available \n only for router type! \n You have {hw_type}"
     },
     "step": {
       "configure_router": {
-        "description": "Дополнительные настройки.",
+        "description": "Additional settings.",
         "data": {
-          "scan_interval": "Интервал скарирования (секунд)",
-          "create_image_qr": "Создать QR коды для всех WiFi сетей.",
-          "select_wifi_qr": "Создать QR коды для выбранных WiFi сетей:",
-          "create_entity_all_clients_button_policy": "Создать политики для всех устройств.",
-          "clients_select_policy": "Создать политики для выбранных устройств:",
-          "create_device_tracker": "Создать объекты device_tracker для всех устройств.",
-          "create_select_device_tracker": "Создать объекты device_tracker для выбранных устройств:",
-          "create_entity_port_forwarding": "Создать переключатели для всех правил перенаправления портов.",
-          "backup_type_file": "Типы файлов резервного копирования:"
+          "scan_interval": "Scan interval (seconds)",
+          "create_image_qr": "Create QR codes for all WiFi networks.",
+          "select_wifi_qr": "Create QR codes for selected WiFi networks:",
+          "create_entity_all_clients_button_policy": "Create policies for all devices.",
+          "clients_select_policy": "Create policies for selected devices:",
+          "create_device_tracker": "Create device_tracker objects for all devices.",
+          "create_select_device_tracker": "Create device_tracker objects for selected devices:",
+          "create_entity_port_forwarding": "Create switches for all port forwarding rules.",
+          "backup_type_file": "Backup file types:"
         }
       },
       "configure_other": {
-        "description": "Дополнительные настройки.",
+        "description": "Additional settings.",
         "data": {
-          "scan_interval": "Интервал скарирования (секунд)"
+          "scan_interval": "Scan interval (seconds)"
         }
       }
     }
   },
   "services": {
     "request_api": {
-      "name": "Выполнить запрос.",
+      "name": "Execute request.",
       "fields": {
         "device_id": {
-          "name": "Устройство:"
+          "name": "Device:"
         },
         "entry_id": {
-          "name": "Интеграция:"
+          "name": "Integration:"
         },
         "method": {
-          "name": "Метод:"
+          "name": "Method:"
         },
         "endpoint": {
-          "name": "Точка API:"
+          "name": "API endpoint:"
         },
         "data_json": {
-          "name": "Данные:"
+          "name": "Data:"
         }
       }
     },
     "backup_router": {
-      "name": "Создать резервную копию.",
+      "name": "Create backup.",
       "fields": {
         "entry_id": {
-          "name": "Интеграция:"
+          "name": "Integration:"
         },
         "folder": {
-          "name": "Папка для сохранения:"
+          "name": "Save folder:"
         },
         "type": {
-          "name": "Тип резервной копии:"
+          "name": "Backup type:"
         }
       }
     }
@@ -83,10 +83,10 @@
   "entity": {
     "select": {
       "client_policy": {
-        "name": "Политика доступа",
+        "name": "Access policy",
         "state": {
-          "default": "По умолчанию",
-          "not_internet": "Без интернета"
+          "default": "Default",
+          "not_internet": "No internet"
         }
       }
     },
@@ -98,30 +98,30 @@
         "name": "Domain Name"
       },
       "cpuload": {
-        "name": "Загрузка процессора"
+        "name": "CPU load"
       },
       "memory": {
-        "name": "Использовано памяти"
+        "name": "Memory used"
       },
       "uptime": {
-        "name": "Время запуска"
+        "name": "Uptime"
       },
       "clients_wifi": {
-        "name": "Клиентов WiFi"
+        "name": "WiFi clients"
       },
       "wan_ip_adress": {
-        "name": "Внешний IP"
+        "name": "External IP"
       }
     },
     "binary_sensor": {
       "connected_to_router": {
-        "name": "Подключение к Keenetic {name}"
+        "name": "Connection to Keenetic {name}"
       },
       "connected_to_interface": {
-        "name": "{name} Подключение"
+        "name": "{name} Connection"
       },
       "connected_to_media": {
-        "name": "Статус {name}"
+        "name": "{name} Status"
       }
     },
     "image": {
@@ -131,7 +131,7 @@
     },
     "button": {
       "reboot": {
-        "name": "Перезагрузить"
+        "name": "Reboot"
       }
     },
     "switch": {
@@ -148,7 +148,7 @@
         "name": "FWD {pfrw_name}"
       },
       "web_configurator_access": {
-        "name": "Доступ к Web интерфейсу"
+        "name": "Web interface access"
       },
       "power_usb": {
         "name": "USB port {number}"
