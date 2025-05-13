@@ -79,11 +79,13 @@ SENSOR_TYPES: tuple[KeeneticRouterSensorEntityDescription, ...] = (
     KeeneticRouterSensorEntityDescription(
         key="cpuload",
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
         native_unit_of_measurement=PERCENTAGE,
     ),
     KeeneticRouterSensorEntityDescription(
         key="memory",
         state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
         native_unit_of_measurement=PERCENTAGE,
         value=lambda coordinator, key: int(float(coordinator.data.show_system[key].split('/')[0])/float(coordinator.data.show_system[key].split('/')[1])*100),
     ),
@@ -116,38 +118,6 @@ SENSOR_TYPES: tuple[KeeneticRouterSensorEntityDescription, ...] = (
     ),
 )
 
-SENSORS_STAT_INTERFACE: tuple[KeeneticRouterSensorEntityDescription, ...] = (
-    KeeneticRouterSensorEntityDescription(
-        key="rxbytes",
-        state_class=SensorDeviceClass.DATA_SIZE,
-        native_unit_of_measurement=UnitOfInformation.MEGABYTES,
-        value=lambda coordinator, obj_id: convert_data_size(coordinator.data.stat_interface[obj_id].get('rxbytes')),
-    ),
-    KeeneticRouterSensorEntityDescription(
-        key="txbytes",
-        state_class=SensorDeviceClass.DATA_SIZE,
-        native_unit_of_measurement=UnitOfInformation.MEGABYTES,
-        value=lambda coordinator, obj_id: convert_data_size(coordinator.data.stat_interface[obj_id].get('txbytes')),
-    ),
-    KeeneticRouterSensorEntityDescription(
-        key="timestamp",
-        device_class=SensorDeviceClass.TIMESTAMP,
-        value=lambda coordinator, obj_id: convert_uptime(coordinator.data.show_interface[obj_id].get('uptime')),
-    ),
-    KeeneticRouterSensorEntityDescription(
-        key="rxspeed",
-        device_class=SensorDeviceClass.DATA_RATE,
-        native_unit_of_measurement=UnitOfDataRate.MEGABITS_PER_SECOND,
-        value=lambda coordinator, obj_id: convert_data_size(coordinator.data.stat_interface[obj_id].get('rxspeed')),
-    ),
-    KeeneticRouterSensorEntityDescription(
-        key="txspeed",
-        device_class=SensorDeviceClass.DATA_RATE,
-        native_unit_of_measurement=UnitOfDataRate.MEGABITS_PER_SECOND,
-        value=lambda coordinator, obj_id: convert_data_size(coordinator.data.stat_interface[obj_id].get('txspeed')),
-    ),
-)
-
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -164,17 +134,7 @@ async def async_setup_entry(
                 sensors.append(KeeneticRouterSensor(coordinator, description, description.key, description.key))
         except Exception as err:
             _LOGGER.debug(f'async_setup_entry sensor SENSOR_TYPES {description} err - {err}')
-    
-    # Добавляем сенсоры для интерфейсов
-    for interface, data_interface in coordinator.data.show_interface.items():
-        if interface in coordinator.router.request_interface:
-            new_name = coordinator.router.request_interface[interface]
-            for description in SENSORS_STAT_INTERFACE:
-                try:
-                    sensors.append(KeeneticRouterSensor(coordinator, description, interface, new_name))
-                except Exception as err:
-                    _LOGGER.debug(f'async_setup_entry sensor SENSORS_STAT_INTERFACE {description} err - {err}')
-    
+
     # Добавляем сенсоры для Mesh-узлов
     if coordinator.router.hw_type == "router":
         try:
@@ -219,21 +179,17 @@ class KeeneticMeshNodeSensor(CoordinatorEntity[KeeneticRouterCoordinator], Senso
         
         model = node_data.get("model", "")
         known_host = node_data.get("known-host", "") or node_data.get("known_host", "")
-        
-        # Формируем имя для отображения БЕЗ префикса "Mesh"
         if known_host:
             display_name = f"{model}"
         else:
             display_name = f"Node {node_id}"
         
-        # Вариант 1: Используем только _attr_name без translation_key
         self._attr_name = f"Mesh {display_name}"
-        self._attr_translation_key = None  # Отключаем использование translation_key
+        self._attr_translation_key = None
         self._attr_translation_placeholders = None
         
         self._attr_unique_id = f"{coordinator.unique_id}_{self.MESH_NODE_PREFIX}{node_id}"
-        
-        # Для совместимости со старыми entity_id
+
         self.entity_id = f"sensor.keenetic_{self.MESH_NODE_PREFIX}{node_id.replace(':', '_')}"
         
         self._attr_device_info = coordinator.device_info
@@ -250,13 +206,11 @@ class KeeneticMeshNodeSensor(CoordinatorEntity[KeeneticRouterCoordinator], Senso
     @property
     def native_value(self):
         """Return the state of the sensor."""
-        # Используем данные, которые уже есть в _node_data
         return self._node_data.get("status", "unknown")
     
     @property
     def extra_state_attributes(self):
         """Return the state attributes."""
-        # Используем данные, которые уже есть в _node_data
         attributes = self._node_data.get("attributes", {})
         
         result = {

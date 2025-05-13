@@ -197,7 +197,7 @@ class Router:
                     return {}
             
             # Импортируем процессор Ethernet портов и обрабатываем данные
-            from .ethernet_processor import EthernetProcessor
+            from .processor_ethernet import EthernetProcessor
             return await EthernetProcessor.process_ethernet_ports(interfaces, get_port_statistics)
         except Exception as ex:
             _LOGGER.error(f"Error processing ethernet ports: {ex}")
@@ -213,7 +213,7 @@ class Router:
             _LOGGER.debug("Mesh network information from /rci/show/mws/member: %s", mesh_info)
             
             # Импортируем процессор Mesh-сети и обрабатываем данные
-            from .mesh_processor import MeshProcessor
+            from .processor_mesh import MeshProcessor
             return MeshProcessor.process_mesh_nodes(mesh_info)
         except Exception as ex:
             _LOGGER.error(f"Error processing mesh nodes: {ex}")
@@ -243,7 +243,7 @@ class Router:
                     return {}
             
             # Импортируем процессор VPN интерфейсов и обрабатываем данные
-            from .vpn_processor import VpnProcessor
+            from .processor_vpn import VpnProcessor
             vpn_interfaces = await VpnProcessor.process_vpn_interfaces(interfaces, get_interface_statistics)
             
             # Логируем результат
@@ -305,7 +305,7 @@ class Router:
                     return {}
             
             # Импортируем процессор WiFi интерфейсов и обрабатываем данные
-            from .wifi_processor import WiFiProcessor
+            from .processor_wifi import WiFiProcessor
             return await WiFiProcessor.process_wifi_interfaces(interfaces, rc_interfaces, get_associations)
         except Exception as ex:
             _LOGGER.error(f"Error processing WiFi interfaces: {ex}")
@@ -357,7 +357,7 @@ class Router:
                     return None
             
             # Импортируем процессор USB портов и обрабатываем данные
-            from .usb_processor import UsbProcessor
+            from .processor_usb import UsbProcessor
             return await UsbProcessor.process_usb_ports(usb_info, get_media_info)
         except Exception as ex:
             _LOGGER.error(f"Error processing USB ports: {ex}", exc_info=True)

@@ -6,108 +6,171 @@ import logging
 import io
 import pyqrcode
 
-from homeassistant.components.image import ImageEntity, ImageEntityDescription
+from homeassistant.components.image import ImageEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 import homeassistant.util.dt as dt_util
 
 from .const import (
     DOMAIN,
     COORD_RC_INTERFACE,
+    CONF_CREATE_IMAGE_QR,
+    CONF_SELECT_WIFI_QR,
 )
 from .coordinator import KeeneticRouterRcInterfaceCoordinator
 
 _LOGGER = logging.getLogger(__name__)
-
 
 async def async_setup_entry(
     hass: HomeAssistant, 
     entry: ConfigEntry, 
     async_add_entities: AddEntitiesCallback
 ) -> None:
-    coordinator = hass.data[DOMAIN][entry.entry_id][COORD_RC_INTERFACE]
-    images: list[ImageEntity] = []
+    if COORD_RC_INTERFACE not in hass.data[DOMAIN][entry.entry_id]:
+        _LOGGER.debug("RC Interface coordinator not available for this device, skipping image setup")
+        return
+    """Set up Keenetic QR code image entities."""
+    coordinator: KeeneticRouterRcInterfaceCoordinator = hass.data[DOMAIN][entry.entry_id][COORD_RC_INTERFACE]
+    if coordinator is None:
+        _LOGGER.debug("RC Interface coordinator is None, skipping image setup")
+        return
+    tracked: dict[str, KeeneticQrWiFiImageEntity] = {}
 
-    if coordinator != None and entry.options.get("create_image_qr", False):
-        interfaces = coordinator.data
-        for interface in interfaces:
-            interface_wifi = interfaces[interface]
-            if (interface_wifi.ssid and
-                (interface_wifi.interface in ['WifiMaster0', 'WifiMaster1'])):
-                    images.append(
-                        KeeneticQrWiFiImageEntity(
-                            coordinator,
-                            interface_wifi,
-                        )
+    @callback
+    def async_update_images() -> None:
+        qr_images: list[KeeneticQrWiFiImageEntity] = []
+        selected_networks = entry.options.get(CONF_SELECT_WIFI_QR, [])
+        create_all = entry.options.get(CONF_CREATE_IMAGE_QR, False)
+    
+        entity_registry = async_get_entity_registry(hass)
+    
+        for interface_id, interface_data in coordinator.data.items():
+            # Проверяем, что это WiFi интерфейс с SSID
+            is_wifi = (
+                hasattr(interface_data, 'ssid') and 
+                interface_data.ssid and 
+                hasattr(interface_data, 'interface') and
+                interface_data.interface in ['WifiMaster0', 'WifiMaster1']
+            )
+            
+            if not is_wifi:
+                continue
+    
+            # Если интерфейс выбран или выбраны все, и он еще не отслеживается
+            if (interface_id in selected_networks or create_all):
+                if interface_id not in tracked:
+                    _LOGGER.debug(f"Creating QR code for WiFi: {interface_id} ({interface_data.name_interface})")
+                    tracked[interface_id] = KeeneticQrWiFiImageEntity(
+                        coordinator,
+                        interface_id,
+                        interface_data.name_interface or interface_id,
                     )
+                    qr_images.append(tracked[interface_id])
+            elif interface_id in tracked:
+                # Удаляем объект из отслеживаемых и из реестра
+                _LOGGER.debug(f"Removing QR code for WiFi: {interface_id}")
+                entity = tracked.pop(interface_id)
+                entity_registry.async_remove(entity.entity_id)
+                hass.async_create_task(entity.async_remove(force_remove=True))
+    
+        # Удаляем все объекты, которые больше не отслеживаются
+        for interface_id in list(tracked):
+            if interface_id not in coordinator.data or interface_id not in selected_networks and not create_all:
+                _LOGGER.debug(f"Cleaning up untracked QR code for WiFi: {interface_id}")
+                entity = tracked.pop(interface_id)
+                entity_registry.async_remove(entity.entity_id)
+                hass.async_create_task(entity.async_remove(force_remove=True))
+    
+        async_add_entities(qr_images)
 
-    async_add_entities(images)
-
+    entry.async_on_unload(coordinator.async_add_listener(async_update_images))
+    async_update_images()
 
 class KeeneticQrWiFiImageEntity(CoordinatorEntity[KeeneticRouterRcInterfaceCoordinator], ImageEntity):
+    """Representation of a Keenetic WiFi QR code image entity."""
 
     _attr_has_entity_name = True
     _attr_content_type = "image/png"
-    _attr_translation_key = "qrwifi"
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    # entity_registry_enabled_default = False
-    _unrecorded_attributes = frozenset({
-        "active", 
-        "rename", 
-        "description", 
-        "ssid", 
-        "password"
-    })
-
+    
     def __init__(
-            self,
-            coordinator: KeeneticRouterRcInterfaceCoordinator,
-            interface_wifi,
+        self,
+        coordinator: KeeneticRouterRcInterfaceCoordinator,
+        interface_id: str,
+        interface_name: str,
     ) -> None:
+        """Initialize the QR code image entity."""
         super().__init__(coordinator)
         ImageEntity.__init__(self, coordinator.hass)
-        self._draft_name = f"{interface_wifi.name_interface}"
-        self._attr_device_info = coordinator.device_info
-        self._attr_unique_id = f"{coordinator.unique_id}_{self._attr_translation_key}_{self._draft_name}"
-        self._attr_translation_placeholders = {"name": self._draft_name}
+        self._interface_id = interface_id
+        self._attr_name = interface_name
+        self._attr_unique_id = f"{coordinator.unique_id}_qrwifi_{interface_id}"
         self._attr_image_last_updated = dt_util.utcnow()
-        self._interface_wifi = interface_wifi
-        self.image: io.BytesIO = io.BytesIO()
-
+        _LOGGER.debug(f"Initialized QR code entity for {interface_name} with ID {interface_id}")
+        
     async def async_image(self) -> bytes | None:
         """Return bytes of image."""
-        wifi_ssid = self._interface_wifi.ssid
-        wifi_pass = self._interface_wifi.password
-        if wifi_pass != None:
+        if self._interface_id not in self.coordinator.data:
+            _LOGGER.warning(f"Interface {self._interface_id} not found in coordinator data")
+            return None
+            
+        interface_data = self.coordinator.data[self._interface_id]
+        
+        # Проверяем, что это WiFi интерфейс с SSID
+        if not hasattr(interface_data, 'ssid') or not interface_data.ssid:
+            _LOGGER.warning(f"Interface {self._interface_id} has no SSID")
+            return None
+            
+        wifi_ssid = interface_data.ssid
+        wifi_pass = interface_data.password
+        
+        buffer = io.BytesIO()
+        if wifi_pass is not None:
             code = pyqrcode.create(f'WIFI:S:{wifi_ssid};T:WPA;P:{wifi_pass};;')
         else:
             code = pyqrcode.create(f'WIFI:S:{wifi_ssid};T:nopass;;;')
-        code.png(self.image,scale=10)
-        return self.image.getvalue()
+        
+        code.png(buffer, scale=10)
+        buffer.seek(0)
+        return buffer.getvalue()
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        if (
-            self._interface_wifi.ssid != self.coordinator.data[self._interface_wifi["id"]].ssid
-            or self._interface_wifi.password != self.coordinator.data[self._interface_wifi["id"]].password
-        ):
-            self._interface_wifi = self.coordinator.data[self._interface_wifi['id']]
-            self._attr_image_last_updated = dt_util.utcnow()
-        super()._handle_coordinator_update()
+    @property
+    def available(self) -> bool:
+        """Return True if entity is available."""
+        if self._interface_id not in self.coordinator.data:
+            return False
+            
+        interface_data = self.coordinator.data[self._interface_id]
+        return hasattr(interface_data, 'ssid') and interface_data.ssid is not None
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return the device info for grouping entities."""
+        return self.coordinator.device_info
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra attributes of the image."""
-        return {
-            "interface": self._interface_wifi.id,
-            "ssid": self._interface_wifi.ssid,
-            "password": self._interface_wifi.password,
-            "active": self._interface_wifi.active,
-            "rename": self._interface_wifi.rename,
-            "description": self._interface_wifi.description,
-        }
+        if self._interface_id not in self.coordinator.data:
+            return {}
+            
+        interface_data = self.coordinator.data[self._interface_id]
+        attrs = {}
+        
+        if hasattr(interface_data, 'id'):
+            attrs["interface"] = interface_data.id
+        if hasattr(interface_data, 'ssid'):
+            attrs["ssid"] = interface_data.ssid
+        if hasattr(interface_data, 'password'):
+            attrs["password"] = interface_data.password
+        if hasattr(interface_data, 'active'):
+            attrs["active"] = interface_data.active
+        if hasattr(interface_data, 'rename'):
+            attrs["rename"] = interface_data.rename
+        if hasattr(interface_data, 'description'):
+            attrs["description"] = interface_data.description
+            
+        return attrs

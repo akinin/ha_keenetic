@@ -25,6 +25,7 @@ from . import get_api
 from .const import (
     DOMAIN,
     COORD_FULL,
+    COORD_RC_INTERFACE,
 )
 from .keenetic import Router
 from .const import (
@@ -33,6 +34,7 @@ from .const import (
     CONF_CLIENTS_SELECT_POLICY,
     CONF_CREATE_ALL_CLIENTS_POLICY,
     CONF_CREATE_IMAGE_QR,
+    CONF_SELECT_WIFI_QR,
     CONF_CREATE_DT,
     CONF_CREATE_PORT_FRW,
     DEFAULT_BACKUP_TYPE_FILE,
@@ -71,7 +73,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.error('Keenetic Api Integration Exception - {}'.format(error))
                 errors['base'] = str(error)
             if title != "":
-                unique_id: str = f"{keen['vendor']} {keen['device']} {format_mac(router.mac)[-8:].replace(':', '')}"
+                unique_id: str = f"{keen['vendor']} {keen['device']} {format_mac(router.mac).replace(':', '')}"
                 await self.async_set_unique_id(unique_id)
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(title=title, data=user_input)
@@ -89,7 +91,7 @@ class OptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, config_entry):
         """Initialize Keenetic options flow."""
-        self.config_entry = config_entry
+        #self.config_entry = config_entry
         self._options = dict(config_entry.options)
 
     async def async_step_init(
@@ -113,6 +115,7 @@ class OptionsFlow(config_entries.OptionsFlow):
             self._options.update(user_input)
             return self.async_create_entry(title="", data=self._options)
 
+        # Получаем список клиентов для политик и трекеров
         data_clients = await self.router.show_ip_hotspot()
         _LOGGER.debug(f'CONF_CLIENTS_SELECT_POLICY - {self._options.get(CONF_CLIENTS_SELECT_POLICY, [])}')
         clients = {
@@ -132,6 +135,26 @@ class OptionsFlow(config_entries.OptionsFlow):
             if mac not in clients
         }
 
+        # Получаем список WiFi интерфейсов для QR-кодов
+        wifi_interfaces = {}
+        try:
+            if COORD_RC_INTERFACE in self.hass.data[DOMAIN][self.config_entry.entry_id]:
+                rc_interfaces = self.hass.data[DOMAIN][self.config_entry.entry_id][COORD_RC_INTERFACE].data
+                for interface_id, interface_data in rc_interfaces.items():
+                    if (hasattr(interface_data, 'ssid') and 
+                        interface_data.ssid and 
+                        interface_data.interface in ['WifiMaster0', 'WifiMaster1']):
+                        wifi_interfaces[interface_id] = f"{interface_data.name_interface}"
+        except Exception as e:
+            _LOGGER.error(f"Error getting WiFi interfaces: {e}")
+        
+        # Добавляем неизвестные интерфейсы из сохраненных настроек
+        wifi_interfaces |= {
+            interface_id: f"Unknown ({interface_id})"
+            for interface_id in self._options.get(CONF_SELECT_WIFI_QR, [])
+            if interface_id not in wifi_interfaces
+        }
+
         return self.async_show_form(
             step_id="configure_router",
             data_schema=vol.Schema(
@@ -148,6 +171,12 @@ class OptionsFlow(config_entries.OptionsFlow):
                             CONF_CREATE_IMAGE_QR, False
                         ),
                     ): bool,
+                    vol.Optional(
+                        CONF_SELECT_WIFI_QR,
+                        default=self._options.get(CONF_SELECT_WIFI_QR, []),
+                    ): cv.multi_select(
+                        dict(sorted(wifi_interfaces.items(), key=operator.itemgetter(1)))
+                    ),
                     vol.Optional(
                         CONF_CREATE_ALL_CLIENTS_POLICY,
                         default=self._options.get(

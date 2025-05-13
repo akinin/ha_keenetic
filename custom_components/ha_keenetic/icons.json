@@ -63,17 +63,13 @@
             "wan_ip_adress": {
                 "default": "mdi:ip-network"
             },
-            "rxbytes": {
-                "default": "mdi:database-import"
-            },
-            "txbytes": {
-                "default": "mdi:database-export"
-            },
-            "rxspeed": {
-                "default": "mdi:download-network"
-            },
-            "txspeed": {
-                "default": "mdi:upload-network"
+            "mesh_node": {
+                "default": "mdi:access-point",
+                "state": {
+                    "connected": "mdi:access-point",
+                    "disconnected": "mdi:access-point-off",
+                    "unknown": "mdi:access-point-remove"
+                }
             }
         },
         "binary_sensor": {

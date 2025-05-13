@@ -3,12 +3,12 @@ request_api:
     device_id:
       selector:
         device:
-          integration: ha_keenetic_new
+          integration: ha_keenetic
           manufacturer: Keenetic Ltd.
     entry_id:
       selector:
         config_entry:
-          integration: ha_keenetic_new
+          integration: ha_keenetic
     method:
       required: true
       selector:
@@ -30,12 +30,12 @@ backup_router:
     device_id:
       selector:
         device:
-          integration: ha_keenetic_new
+          integration: ha_keenetic
           manufacturer: Keenetic Ltd.
     entry_id:
       selector:
         config_entry:
-          integration: ha_keenetic_new
+          integration: ha_keenetic
     folder:
       required: true
       selector:

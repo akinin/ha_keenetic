@@ -12,6 +12,7 @@ from homeassistant.helpers.update_coordinator import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.const import CONF_HOST
+from homeassistant.config_entries import ConfigEntry
 
 from .keenetic import Router
 from .const import (
@@ -113,19 +114,46 @@ class KeeneticRouterFirmwareCoordinator(DataUpdateCoordinator):
         firmware['sandbox'] = data_components_list.get('sandbox')
         if (
             self._version_firmware == {} 
-            or self._version_firmware.get("new").get("version") != firmware.get("new").get("version") 
-            or self._version_firmware.get("current").get("version") != firmware.get("current").get("version")
+            or self._version_firmware.get("new", {}).get("version") != firmware.get("new", {}).get("version") 
+            or self._version_firmware.get("current", {}).get("version") != firmware.get("current", {}).get("version")
         ):
             repeat=0
             while repeat < COUNT_REPEATED_REQUEST_FIREWARE:
                 repeat += 1
-                data_release_notes = await self.router.release_notes(firmware['new']['version'], FW_SANDBOX[firmware['sandbox']])
-                if not data_release_notes.get('continued', False):
+                try:
+                    # Проверяем, что у нас есть необходимые данные для запроса
+                    if firmware.get('new') and firmware.get('new', {}).get('version') and firmware.get('sandbox') is not None:
+                        data_release_notes = await self.router.release_notes(firmware['new']['version'], FW_SANDBOX[firmware['sandbox']])
+                        if not data_release_notes.get('continued', False):
+                            break
+                        _LOGGER.debug(f"{self.router.mac} data_release_notes not data {data_release_notes}")
+                    else:
+                        _LOGGER.debug(f"{self.router.mac} Missing required firmware data for release notes")
+                        break
+                except Exception as err:
+                    _LOGGER.debug(f"{self.router.mac} Error getting release notes: {err}")
                     break
-                _LOGGER.debug(f"{self.router.mac} data_release_notes not data {data_release_notes}")
                 await asyncio.sleep(TIMER_REPEATED_REQUEST_FIREWARE)
-            firmware['release_notes'] = data_release_notes['webhelp']['ru'][0]['href']
-            firmware['channel'] = data_release_notes['webhelp']['ru'][0]['title']
+            
+            # Безопасно извлекаем данные из ответа
+            try:
+                if isinstance(data_release_notes, dict) and 'webhelp' in data_release_notes:
+                    webhelp = data_release_notes['webhelp']
+                    if isinstance(webhelp, dict) and 'ru' in webhelp and isinstance(webhelp['ru'], list) and len(webhelp['ru']) > 0:
+                        firmware['release_notes'] = webhelp['ru'][0].get('href', '')
+                        firmware['channel'] = webhelp['ru'][0].get('title', '')
+                    else:
+                        firmware['release_notes'] = ''
+                        firmware['channel'] = ''
+                else:
+                    # Если данные не в ожидаемом формате, устанавливаем пустые значения
+                    firmware['release_notes'] = ''
+                    firmware['channel'] = ''
+            except Exception as err:
+                _LOGGER.debug(f"{self.router.mac} Error processing release notes: {err}")
+                firmware['release_notes'] = ''
+                firmware['channel'] = ''
+            
             self._version_firmware = firmware
         return self._version_firmware
 
