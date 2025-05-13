@@ -53,7 +53,6 @@ PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.BUTTON,
     Platform.IMAGE,
-    #Platform.BINARY_SENSOR,
     Platform.SELECT,
     Platform.DEVICE_TRACKER,
     Platform.SWITCH,
@@ -63,7 +62,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-
+    """Set up Keenetic API from a config entry."""
     client = await get_api(hass, entry.data)
 
     coordinator_full = KeeneticRouterCoordinator(hass, client, entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL), entry)

@@ -119,7 +119,7 @@ class KeeneticQrWiFiImageEntity(CoordinatorEntity[KeeneticRouterRcInterfaceCoord
             
         interface_data = self.coordinator.data[self._interface_id]
         
-        # Проверяем, что это WiFi интерфейс с SSID
+        # Check that this is a WiFi interface with SSID
         if not hasattr(interface_data, 'ssid') or not interface_data.ssid:
             _LOGGER.warning(f"Interface {self._interface_id} has no SSID")
             return None
