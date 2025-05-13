@@ -60,7 +60,7 @@
             "cpuload": {
                 "default": "mdi:cpu-32-bit"
             },
-            "wan_ip_adress": {
+            "wan_ip_address": {
                 "default": "mdi:ip-network"
             },
             "mesh_node": {

@@ -58,7 +58,7 @@ def convert_data_size(data_size: int = 0) -> float:
     """Convert data_size."""
     return round(data_size/1024/1024, 3)
 
-def ind_wan_ip_adress(fdata: KeeneticFullData):
+def ind_wan_ip_address(fdata: KeeneticFullData):
     """Определение внешнего IP адреса."""
     try:
         data_p_i = fdata.priority_interface
@@ -71,7 +71,7 @@ def ind_wan_ip_adress(fdata: KeeneticFullData):
                 else:
                     return show_interface[row]["address"]
     except Exception as ex:
-        _LOGGER.debug(f'Not ind_wan_ip_adress - {ex}')
+        _LOGGER.debug(f'Not ind_wan_ip_address - {ex}')
         return None
 
 
@@ -96,9 +96,9 @@ SENSOR_TYPES: tuple[KeeneticRouterSensorEntityDescription, ...] = (
         value=lambda coordinator, key: convert_uptime(coordinator.data.show_system[key]),
     ),
     KeeneticRouterSensorEntityDescription(
-        key="wan_ip_adress",
+        key="wan_ip_address",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value=lambda coordinator, key: ind_wan_ip_adress(coordinator.data),
+        value=lambda coordinator, key: ind_wan_ip_address(coordinator.data),
     ),
     KeeneticRouterSensorEntityDescription(
         key="clients_wifi",

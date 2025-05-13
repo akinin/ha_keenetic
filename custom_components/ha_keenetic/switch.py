@@ -51,9 +51,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
     switches: list[SwitchEntity] = []
     
     if coordinator.router.hw_type == "router":
-        # Собираем все данные в одном запросе, если возможно
         try:
-            # Получаем все данные параллельно для ускорения загрузки
             import asyncio
             
             tasks = [
@@ -85,7 +83,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                 
             # Создаем сущности для WiFi интерфейсов
             for interface_id, interface_data in wifi_interfaces.items():
-                # Создаем только для точек доступа, не для мастер-интерфейсов
                 if '/AccessPoint' in interface_id and interface_data.get('ssid'):
                     switches.append(
                         KeeneticWiFiSwitchEntity(
@@ -162,7 +159,6 @@ class KeeneticWiFiSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swi
     def is_on(self) -> bool:
         """Return state."""
         try:
-            # Проверяем состояние WiFi интерфейса
             for interface_id, interface_data in self.coordinator.data.show_interface.items():
                 if interface_id == self._id:
                     return interface_data.get('state', 'down') == 'up'
@@ -228,7 +224,6 @@ class KeeneticVpnSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swit
     def is_on(self) -> bool:
         """Return state."""
         try:
-            # Проверяем состояние VPN интерфейса
             for interface_id, interface_data in self.coordinator.data.show_interface.items():
                 if interface_id == self._id:
                     return interface_data.get('state', 'down') == 'up'
@@ -295,7 +290,6 @@ class KeeneticUsbPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], 
     def is_on(self) -> bool:
         """Return state."""
         try:
-            # Проверяем состояние питания USB порта
             for usb_port in self.coordinator.data.show_rc_system_usb:
                 if usb_port.get('port') == self._port:
                     return not usb_port.get('power', {}).get('shutdown', False)
@@ -349,7 +343,6 @@ class KeeneticEthernetPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinat
         self._id = port_data["id"]
         self._type = port_data["type"]
         
-        # Определяем имя и translation_key в зависимости от типа порта
         if self._type == "wan":
             self._attr_name = "Port WAN"
             self._attr_translation_key = "interface"
@@ -366,10 +359,7 @@ class KeeneticEthernetPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinat
     @property
     def is_on(self) -> bool:
         """Return state."""
-        # Обновляем данные о порте при каждом запросе состояния
         try:
-            # Здесь нужно получить актуальное состояние порта
-            # Можно использовать link == "up" как индикатор включенного состояния
             for port_id, port_data in self.coordinator.data.show_interface.items():
                 if port_id == self._id or (self._type == "port" and port_id in self._id):
                     return port_data.get("link", "down") == "up"
@@ -380,7 +370,6 @@ class KeeneticEthernetPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinat
     
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the port."""
-        # Реализация включения порта
         try:
             port_id = self._id
             if self._type == "port" and "_port_" in self._id:
@@ -392,7 +381,6 @@ class KeeneticEthernetPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinat
     
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the port."""
-        # Реализация выключения порта
         try:
             port_id = self._id
             if self._type == "port" and "_port_" in self._id:
@@ -410,7 +398,6 @@ class KeeneticEthernetPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinat
             "port_id": self._id,
         }
         
-        # Добавляем все атрибуты из port_data
         if "attributes" in self._port_data:
             attributes.update(self._port_data["attributes"])
         

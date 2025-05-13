@@ -109,7 +109,7 @@
       "clients_wifi": {
         "name": "WiFi clients"
       },
-      "wan_ip_adress": {
+      "wan_ip_address": {
         "name": "External IP"
       }
     },

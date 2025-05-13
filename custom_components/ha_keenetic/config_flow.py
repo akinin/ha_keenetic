@@ -115,7 +115,7 @@ class OptionsFlow(config_entries.OptionsFlow):
             self._options.update(user_input)
             return self.async_create_entry(title="", data=self._options)
 
-        # Получаем список клиентов для политик и трекеров
+        # Get list of clients for policies and trackers
         data_clients = await self.router.show_ip_hotspot()
         _LOGGER.debug(f'CONF_CLIENTS_SELECT_POLICY - {self._options.get(CONF_CLIENTS_SELECT_POLICY, [])}')
         clients = {
@@ -135,7 +135,7 @@ class OptionsFlow(config_entries.OptionsFlow):
             if mac not in clients
         }
 
-        # Получаем список WiFi интерфейсов для QR-кодов
+        # Get list of WiFi interfaces for QR codes
         wifi_interfaces = {}
         try:
             if COORD_RC_INTERFACE in self.hass.data[DOMAIN][self.config_entry.entry_id]:
@@ -148,7 +148,6 @@ class OptionsFlow(config_entries.OptionsFlow):
         except Exception as e:
             _LOGGER.error(f"Error getting WiFi interfaces: {e}")
         
-        # Добавляем неизвестные интерфейсы из сохраненных настроек
         wifi_interfaces |= {
             interface_id: f"Unknown ({interface_id})"
             for interface_id in self._options.get(CONF_SELECT_WIFI_QR, [])

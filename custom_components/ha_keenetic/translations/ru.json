@@ -11,7 +11,7 @@
           "username": "Логин",
           "password": "Пароль",
           "ssl": "SSL сертификат",
-          "scan_interval": "Интервал скарирования (секунд)"
+          "scan_interval": "Интервал сканирования (секунд)"
         },
         "description": "Введите свои учетные данные Keenetic."
       }
@@ -109,7 +109,7 @@
       "clients_wifi": {
         "name": "Клиентов WiFi"
       },
-      "wan_ip_adress": {
+      "wan_ip_address": {
         "name": "Внешний IP"
       }
     },
