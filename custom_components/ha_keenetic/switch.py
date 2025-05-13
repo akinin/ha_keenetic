@@ -186,25 +186,16 @@ class KeeneticWiFiSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swi
             await self.coordinator.async_request_refresh()
         except Exception as ex:
             _LOGGER.error(f"Error turning off WiFi interface {self._id}: {ex}")
-    
+
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the state attributes."""
         attributes = {
-            "interface_id": self._id,
             "ssid": self._ssid,
             "band": self._band,
             "password": self._password,
-            "encryption": self._encryption,
-            "interface_name": self._interface_name,
-            "description": self._description,
-            "connected": self._connected
+            "encryption": self._encryption
         }
-        
-        # Добавляем все атрибуты из interface_data
-        if "attributes" in self._interface_data:
-            attributes.update(self._interface_data["attributes"])
-        
         return attributes
 
 class KeeneticVpnSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], SwitchEntity):
@@ -266,14 +257,13 @@ class KeeneticVpnSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swit
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the state attributes."""
         attributes = {
-            "interface_id": self._id,
             "vpn_type": self._vpn_type,
         }
-        
-        # Добавляем все атрибуты из interface_data
-        if "attributes" in self._interface_data:
-            attributes.update(self._interface_data["attributes"])
-        
+
+        direct_attrs = ["link", "connected", "address", "mask", "uptime"]
+        for attr in direct_attrs:
+            if attr in self._interface_data:
+                attributes[attr] = self._interface_data[attr]
         return attributes
 
 class KeeneticUsbPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], SwitchEntity):
