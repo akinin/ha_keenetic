@@ -47,7 +47,6 @@ class KeeneticRouterCoordinator(DataUpdateCoordinator):
         )
 
     async def _async_update_data(self):
-        """Asynchronous update of all data."""
         _errr = None
         try:
             full_data = await self.router.custom_request()
@@ -121,7 +120,6 @@ class KeeneticRouterFirmwareCoordinator(DataUpdateCoordinator):
             while repeat < COUNT_REPEATED_REQUEST_FIREWARE:
                 repeat += 1
                 try:
-                    # Проверяем, что у нас есть необходимые данные для запроса
                     if firmware.get('new') and firmware.get('new', {}).get('version') and firmware.get('sandbox') is not None:
                         data_release_notes = await self.router.release_notes(firmware['new']['version'], FW_SANDBOX[firmware['sandbox']])
                         if not data_release_notes.get('continued', False):
@@ -134,8 +132,7 @@ class KeeneticRouterFirmwareCoordinator(DataUpdateCoordinator):
                     _LOGGER.debug(f"{self.router.mac} Error getting release notes: {err}")
                     break
                 await asyncio.sleep(TIMER_REPEATED_REQUEST_FIREWARE)
-            
-            # Безопасно извлекаем данные из ответа
+
             try:
                 if isinstance(data_release_notes, dict) and 'webhelp' in data_release_notes:
                     webhelp = data_release_notes['webhelp']
@@ -146,7 +143,6 @@ class KeeneticRouterFirmwareCoordinator(DataUpdateCoordinator):
                         firmware['release_notes'] = ''
                         firmware['channel'] = ''
                 else:
-                    # Если данные не в ожидаемом формате, устанавливаем пустые значения
                     firmware['release_notes'] = ''
                     firmware['channel'] = ''
             except Exception as err:
@@ -191,7 +187,6 @@ class KeeneticRouterRcInterfaceCoordinator(DataUpdateCoordinator):
         )
 
     async def _async_update_data(self):
-        """Asynchronous update of all data."""
         try:
             return await self.router.show_rc_interface()
         except Exception as err:

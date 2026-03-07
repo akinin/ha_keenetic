@@ -184,10 +184,8 @@ class Router:
     async def get_ethernet_ports(self):
         """Get information about ethernet ports."""
         try:
-            # Получаем информацию об интерфейсах
             interfaces = await self.show_interface()
-            
-            # Создаем функцию для получения статистики по интерфейсу
+
             async def get_port_statistics(port_id):
                 try:
                     stats = await self.show_interface_stat(port_id)
@@ -195,8 +193,7 @@ class Router:
                 except Exception as ex:
                     _LOGGER.error(f"Error getting statistics for port {port_id}: {ex}")
                     return {}
-            
-            # Импортируем процессор Ethernet портов и обрабатываем данные
+
             from .processor_ethernet import EthernetProcessor
             return await EthernetProcessor.process_ethernet_ports(interfaces, get_port_statistics)
         except Exception as ex:
@@ -204,15 +201,11 @@ class Router:
             return {}
 
     async def get_mesh_nodes(self):
-        """Get information about mesh network nodes."""
         try:
-            # Используем правильный API-путь для получения информации о Mesh-узлах
             mesh_info = await self.api("get", "/rci/show/mws/member")
-            
-            # Логируем для отладки
+
             _LOGGER.debug("Mesh network information from /rci/show/mws/member: %s", mesh_info)
-            
-            # Импортируем процессор Mesh-сети и обрабатываем данные
+
             from .processor_mesh import MeshProcessor
             return MeshProcessor.process_mesh_nodes(mesh_info)
         except Exception as ex:
@@ -220,20 +213,15 @@ class Router:
             return {}
 
     async def get_vpn_interfaces(self):
-        """Get information about VPN interfaces."""
         try:
-            # Получаем информацию об интерфейсах
             interfaces = await self.show_interface()
-            
-            # Логируем для отладки
+
             _LOGGER.debug("Available interfaces for VPN processing: %s", list(interfaces.keys()))
-            
-            # Дополнительно логируем интерфейсы, содержащие 'wireguard' или 'wg' в имени
+
             for interface_id, interface_data in interfaces.items():
                 if 'wireguard' in interface_id.lower() or 'wg' in interface_id.lower():
                     _LOGGER.debug("Found potential WireGuard interface: %s, data: %s", interface_id, interface_data)
-            
-            # Создаем функцию для получения статистики по интерфейсу
+
             async def get_interface_statistics(interface_id):
                 try:
                     stats = await self.show_interface_stat(interface_id)
@@ -241,12 +229,10 @@ class Router:
                 except Exception as ex:
                     _LOGGER.error(f"Error getting statistics for interface {interface_id}: {ex}")
                     return {}
-            
-            # Импортируем процессор VPN интерфейсов и обрабатываем данные
+
             from .processor_vpn import VpnProcessor
             vpn_interfaces = await VpnProcessor.process_vpn_interfaces(interfaces, get_interface_statistics)
-            
-            # Логируем результат
+
             _LOGGER.debug("Found VPN interfaces: %s", list(vpn_interfaces.keys()))
             
             return vpn_interfaces
@@ -285,26 +271,19 @@ class Router:
         return result
 
     async def get_wifi_interfaces(self):
-        """Get information about WiFi interfaces."""
         try:
-            # Получаем информацию об интерфейсах
             interfaces = await self.show_interface()
-            
-            # Получаем информацию о RC интерфейсах
             rc_interfaces = await self.show_rc_interface()
-            
-            # Создаем функцию для получения информации о подключенных клиентах
+
             async def get_associations():
                 try:
                     associations = await self.show_associations()
-                    # Логируем тип и структуру данных для отладки
                     _LOGGER.debug(f"Associations type: {type(associations)}, data: {associations}")
                     return associations
                 except Exception as ex:
                     _LOGGER.error(f"Error getting associations: {ex}")
                     return {}
-            
-            # Импортируем процессор WiFi интерфейсов и обрабатываем данные
+
             from .processor_wifi import WiFiProcessor
             return await WiFiProcessor.process_wifi_interfaces(interfaces, rc_interfaces, get_associations)
         except Exception as ex:
@@ -312,16 +291,13 @@ class Router:
             return {}
 
     async def get_usb_ports(self):
-        """Get information about USB ports."""
         try:
-            # Проверяем, есть ли данные о USB-портах в уже полученных данных
             usb_info = []
             
             if hasattr(self, 'data') and hasattr(self.data, 'show_rc_system_usb'):
                 usb_info = self.data.show_rc_system_usb
                 _LOGGER.debug(f"Using existing USB info from show_rc_system_usb: {usb_info}")
-            
-            # Если данных нет, пытаемся получить их напрямую
+
             if not usb_info:
                 try:
                     _LOGGER.debug("Trying to get USB info directly")
@@ -337,17 +313,14 @@ class Router:
                     _LOGGER.debug(f"Got USB info directly: {usb_info}")
                 except Exception as ex:
                     _LOGGER.error(f"Error getting USB info directly: {ex}")
-            
-            # Если usb_info не список, преобразуем его
+
             if isinstance(usb_info, dict):
                 usb_info = [usb_info]
             elif not isinstance(usb_info, list):
                 usb_info = []
-            
-            # Создаем функцию для получения информации о медиа-устройствах
+
             async def get_media_info(media_name):
                 try:
-                    # Проверяем, что self.data и self.data.show_media существуют
                     if hasattr(self, 'data') and hasattr(self.data, 'show_media'):
                         media_info = self.data.show_media.get(media_name)
                         return media_info
@@ -355,8 +328,7 @@ class Router:
                 except Exception as ex:
                     _LOGGER.error(f"Error getting media info for {media_name}: {ex}")
                     return None
-            
-            # Импортируем процессор USB портов и обрабатываем данные
+
             from .processor_usb import UsbProcessor
             return await UsbProcessor.process_usb_ports(usb_info, get_media_info)
         except Exception as ex:

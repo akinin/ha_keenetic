@@ -64,7 +64,7 @@ class KeeneticScannerEntity(CoordinatorEntity[KeeneticRouterCoordinator], Scanne
         mac: str,
         hostname: str,
     ) -> None:
-        """Initialize the device."""
+
         super().__init__(coordinator)
         self._mac = mac
         self._attr_name = hostname
@@ -75,7 +75,6 @@ class KeeneticScannerEntity(CoordinatorEntity[KeeneticRouterCoordinator], Scanne
 
     @property
     def source_type(self) -> str:
-        """Return the source type, eg gps or router, of the device."""
         return SourceType.ROUTER
 
     @property
@@ -88,7 +87,6 @@ class KeeneticScannerEntity(CoordinatorEntity[KeeneticRouterCoordinator], Scanne
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return the device info."""
         return DeviceInfo(
             connections={(CONNECTION_NETWORK_MAC, self._mac)},
             name=self._attr_name,
@@ -97,7 +95,6 @@ class KeeneticScannerEntity(CoordinatorEntity[KeeneticRouterCoordinator], Scanne
 
     @property
     def extra_state_attributes(self) -> dict[str, StateType]:
-        """Return the state attributes of the device."""
         if self._mac in self.coordinator.data.show_ip_hotspot:
             dt_hotspot = self.coordinator.data.show_ip_hotspot[self._mac]
             self._ip_address = dt_hotspot.ip
@@ -112,10 +109,8 @@ class KeeneticScannerEntity(CoordinatorEntity[KeeneticRouterCoordinator], Scanne
 
     @property
     def mac_address(self) -> str:
-        """Return the mac address of the device."""
         return self._mac
 
     @property
     def ip_address(self) -> str:
-        """Return the IP address."""
         return self._ip_address

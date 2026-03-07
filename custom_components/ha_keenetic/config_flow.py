@@ -59,7 +59,6 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(self, user_input=None):
-        """Handle the initial step."""
         errors = {}
         title = ""
         if user_input is not None:
@@ -87,10 +86,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class OptionsFlow(config_entries.OptionsFlow):
-    """Handle a options flow for Keenetic."""
 
     def __init__(self, config_entry):
-        """Initialize Keenetic options flow."""
         #self.config_entry = config_entry
         self._options = dict(config_entry.options)
 
@@ -115,7 +112,6 @@ class OptionsFlow(config_entries.OptionsFlow):
             self._options.update(user_input)
             return self.async_create_entry(title="", data=self._options)
 
-        # Get list of clients for policies and trackers
         data_clients = await self.router.show_ip_hotspot()
         _LOGGER.debug(f'CONF_CLIENTS_SELECT_POLICY - {self._options.get(CONF_CLIENTS_SELECT_POLICY, [])}')
         clients = {
@@ -135,7 +131,6 @@ class OptionsFlow(config_entries.OptionsFlow):
             if mac not in clients
         }
 
-        # Get list of WiFi interfaces for QR codes
         wifi_interfaces = {}
         try:
             if COORD_RC_INTERFACE in self.hass.data[DOMAIN][self.config_entry.entry_id]:

@@ -63,7 +63,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             
             ethernet_ports, usb_ports, wifi_interfaces, vpn_interfaces = await asyncio.gather(*tasks)
             
-            # Создаем сущности для Ethernet портов
             for port_id, port_data in ethernet_ports.items():
                 switches.append(
                     KeeneticEthernetPortSwitchEntity(
@@ -72,7 +71,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                     )
                 )
             
-            # Создаем сущности для USB портов
             for port_id, port_data in usb_ports.items():
                 switches.append(
                     KeeneticUsbPortSwitchEntity(
@@ -81,7 +79,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                     )
                 )
                 
-            # Создаем сущности для WiFi интерфейсов
             for interface_id, interface_data in wifi_interfaces.items():
                 if '/AccessPoint' in interface_id and interface_data.get('ssid'):
                     switches.append(
@@ -91,7 +88,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                         )
                     )
                 
-            # Создаем сущности для VPN интерфейсов
             for interface_id, interface_data in vpn_interfaces.items():
                 switches.append(
                     KeeneticVpnSwitchEntity(
@@ -103,7 +99,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         except Exception as ex:
             _LOGGER.error(f"Error setting up switch entities: {ex}")
 
-        # Добавляем переадресацию портов
         if entry.options.get(CONF_CREATE_PORT_FRW, False):
             port_forwardings = coordinator.data.show_rc_ip_static
             for index, port_frw in port_forwardings.items():
@@ -114,7 +109,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
                     )
                 )
 
-    # Добавляем остальные переключатели
     for description in SWITCH_TYPES:
         if coordinator.router.hw_type == "router":
             switches.append(KeeneticSwitchEntity(coordinator, description, description.key))
@@ -124,7 +118,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
 
 
 class KeeneticWiFiSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], SwitchEntity):
-    """Keenetic WiFi switch entity."""
     
     _attr_has_entity_name = True
     
@@ -133,7 +126,6 @@ class KeeneticWiFiSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swi
         coordinator: KeeneticRouterCoordinator,
         interface_data,
     ) -> None:
-        """Initialize the Keenetic WiFi switch."""
         super().__init__(coordinator)
         self._interface_data = interface_data
         self._id = interface_data["id"]
@@ -145,7 +137,6 @@ class KeeneticWiFiSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swi
         self._description = interface_data.get("description", "")
         self._connected = interface_data.get("connected", "no")
         
-        # Формируем имя для отображения
         self._attr_name = f"{self._ssid} ({self._band})"
         self._attr_translation_key = "wifi_interface"
             
@@ -157,7 +148,6 @@ class KeeneticWiFiSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swi
     
     @property
     def is_on(self) -> bool:
-        """Return state."""
         try:
             for interface_id, interface_data in self.coordinator.data.show_interface.items():
                 if interface_id == self._id:
@@ -168,7 +158,6 @@ class KeeneticWiFiSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swi
             return False
     
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn on the WiFi interface."""
         try:
             await self.coordinator.router.turn_on_off_interface(self._id, 'up')
             await self.coordinator.async_request_refresh()
@@ -176,7 +165,6 @@ class KeeneticWiFiSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swi
             _LOGGER.error(f"Error turning on WiFi interface {self._id}: {ex}")
     
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off the WiFi interface."""
         try:
             await self.coordinator.router.turn_on_off_interface(self._id, 'down')
             await self.coordinator.async_request_refresh()
@@ -185,7 +173,6 @@ class KeeneticWiFiSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swi
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the state attributes."""
         attributes = {
             "ssid": self._ssid,
             "band": self._band,
@@ -195,7 +182,6 @@ class KeeneticWiFiSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swi
         return attributes
 
 class KeeneticVpnSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], SwitchEntity):
-    """Keenetic VPN switch entity."""
     
     _attr_has_entity_name = True
     
@@ -204,7 +190,6 @@ class KeeneticVpnSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swit
         coordinator: KeeneticRouterCoordinator,
         interface_data,
     ) -> None:
-        """Initialize the Keenetic VPN switch."""
         super().__init__(coordinator)
         self._interface_data = interface_data
         self._id = interface_data["id"]
@@ -222,7 +207,6 @@ class KeeneticVpnSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swit
     
     @property
     def is_on(self) -> bool:
-        """Return state."""
         try:
             for interface_id, interface_data in self.coordinator.data.show_interface.items():
                 if interface_id == self._id:
@@ -233,7 +217,6 @@ class KeeneticVpnSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swit
             return False
     
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn on the VPN interface."""
         try:
             await self.coordinator.router.turn_on_off_interface(self._id, 'up')
             await self.coordinator.async_request_refresh()
@@ -241,7 +224,6 @@ class KeeneticVpnSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swit
             _LOGGER.error(f"Error turning on VPN interface {self._id}: {ex}")
     
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off the VPN interface."""
         try:
             await self.coordinator.router.turn_on_off_interface(self._id, 'down')
             await self.coordinator.async_request_refresh()
@@ -250,7 +232,6 @@ class KeeneticVpnSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swit
     
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the state attributes."""
         attributes = {
             "vpn_type": self._vpn_type,
         }
@@ -262,7 +243,6 @@ class KeeneticVpnSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swit
         return attributes
 
 class KeeneticUsbPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], SwitchEntity):
-    """Keenetic USB Port switch entity."""
     
     _attr_has_entity_name = True
     
@@ -271,7 +251,6 @@ class KeeneticUsbPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], 
         coordinator: KeeneticRouterCoordinator,
         port_data,
     ) -> None:
-        """Initialize the Keenetic USB Port switch."""
         super().__init__(coordinator)
         self._port_data = port_data
         self._id = port_data["id"]
@@ -288,7 +267,6 @@ class KeeneticUsbPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], 
     
     @property
     def is_on(self) -> bool:
-        """Return state."""
         try:
             for usb_port in self.coordinator.data.show_rc_system_usb:
                 if usb_port.get('port') == self._port:
@@ -299,7 +277,6 @@ class KeeneticUsbPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], 
             return False
     
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn on the USB port."""
         try:
             await self.coordinator.router.turn_on_off_usb(True, self._port)
             await self.coordinator.async_request_refresh()
@@ -307,7 +284,6 @@ class KeeneticUsbPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], 
             _LOGGER.error(f"Error turning on USB port {self._port}: {ex}")
     
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off the USB port."""
         try:
             await self.coordinator.router.turn_on_off_usb(False, self._port)
             await self.coordinator.async_request_refresh()
@@ -316,19 +292,16 @@ class KeeneticUsbPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], 
     
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the state attributes."""
         attributes = {
             "port_id": self._port,
         }
         
-        # Добавляем все атрибуты из port_data
         if "attributes" in self._port_data:
             attributes.update(self._port_data["attributes"])
         
         return attributes
 
 class KeeneticEthernetPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], SwitchEntity):
-    """Keenetic Ethernet Port switch entity."""
     
     _attr_has_entity_name = True
     
@@ -337,7 +310,6 @@ class KeeneticEthernetPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinat
         coordinator: KeeneticRouterCoordinator,
         port_data,
     ) -> None:
-        """Initialize the Keenetic Ethernet Port switch."""
         super().__init__(coordinator)
         self._port_data = port_data
         self._id = port_data["id"]
@@ -358,7 +330,6 @@ class KeeneticEthernetPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinat
     
     @property
     def is_on(self) -> bool:
-        """Return state."""
         try:
             for port_id, port_data in self.coordinator.data.show_interface.items():
                 if port_id == self._id or (self._type == "port" and port_id in self._id):
@@ -392,7 +363,6 @@ class KeeneticEthernetPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinat
     
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the state attributes."""
         attributes = {
             "port_type": self._type,
             "port_id": self._id,
@@ -445,7 +415,6 @@ class KeeneticInterfaceSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator]
         data_interface,
         name_interface
     ) -> None:
-        """Initialize the Keenetic Interface switch."""
         super().__init__(coordinator)
         self._id_interface = data_interface['id']
         self._name_interface = name_interface
@@ -489,27 +458,22 @@ class KeeneticInterfaceSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator]
 
     @property
     def name(self) -> str:
-        """Return the display name of this entity."""
         return self._display_name
 
     @property
     def is_on(self) -> bool:
-        """Return state."""
         return self.coordinator.data.show_interface[self._id_interface]['state'] == "up"
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn on."""
         await self.coordinator.router.turn_on_off_interface(self._id_interface, 'up')
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off."""
         await self.coordinator.router.turn_on_off_interface(self._id_interface, 'down')
         await self.coordinator.async_request_refresh()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the state attributes."""
         interface_data = self.coordinator.data.show_interface[self._id_interface]
         attributes = {
             "interface_type": self._id_interface,
@@ -536,7 +500,6 @@ class KeeneticPortForwardingSwitchEntity(CoordinatorEntity[KeeneticRouterCoordin
         coordinator: KeeneticRouterCoordinator,
         port_frw,
     ) -> None:
-        """Initialize the Keenetic PortForwarding switch."""
         super().__init__(coordinator)
         self._pfrw = port_frw
         self._pfrw_index = port_frw.index
@@ -547,22 +510,18 @@ class KeeneticPortForwardingSwitchEntity(CoordinatorEntity[KeeneticRouterCoordin
 
     @property
     def is_on(self) -> bool:
-        """Return state."""
         return self.coordinator.data.show_rc_ip_static[self._pfrw_index].disable == False
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Turn on."""
         await self.coordinator.router.turn_on_off_port_forwarding(self._pfrw_index, True)
         await self.coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Turn off."""
         await self.coordinator.router.turn_on_off_port_forwarding(self._pfrw_index, False)
         await self.coordinator.async_request_refresh()
 
     @property
     def extra_state_attributes(self) -> dict[str, StateType]:
-        """Return the state attributes."""
         return {
             "interface": self._pfrw.interface,
             "protocol": self._pfrw.protocol,

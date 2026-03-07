@@ -33,7 +33,6 @@ async def async_setup_entry(
     if COORD_RC_INTERFACE not in hass.data[DOMAIN][entry.entry_id]:
         _LOGGER.debug("RC Interface coordinator not available for this device, skipping image setup")
         return
-    """Set up Keenetic QR code image entities."""
     coordinator: KeeneticRouterRcInterfaceCoordinator = hass.data[DOMAIN][entry.entry_id][COORD_RC_INTERFACE]
     if coordinator is None:
         _LOGGER.debug("RC Interface coordinator is None, skipping image setup")
@@ -49,7 +48,6 @@ async def async_setup_entry(
         entity_registry = async_get_entity_registry(hass)
     
         for interface_id, interface_data in coordinator.data.items():
-            # Проверяем, что это WiFi интерфейс с SSID
             is_wifi = (
                 hasattr(interface_data, 'ssid') and 
                 interface_data.ssid and 
@@ -59,8 +57,7 @@ async def async_setup_entry(
             
             if not is_wifi:
                 continue
-    
-            # Если интерфейс выбран или выбраны все, и он еще не отслеживается
+
             if (interface_id in selected_networks or create_all):
                 if interface_id not in tracked:
                     _LOGGER.debug(f"Creating QR code for WiFi: {interface_id} ({interface_data.name_interface})")
@@ -71,13 +68,11 @@ async def async_setup_entry(
                     )
                     qr_images.append(tracked[interface_id])
             elif interface_id in tracked:
-                # Удаляем объект из отслеживаемых и из реестра
                 _LOGGER.debug(f"Removing QR code for WiFi: {interface_id}")
                 entity = tracked.pop(interface_id)
                 entity_registry.async_remove(entity.entity_id)
                 hass.async_create_task(entity.async_remove(force_remove=True))
-    
-        # Удаляем все объекты, которые больше не отслеживаются
+
         for interface_id in list(tracked):
             if interface_id not in coordinator.data or interface_id not in selected_networks and not create_all:
                 _LOGGER.debug(f"Cleaning up untracked QR code for WiFi: {interface_id}")
@@ -91,7 +86,6 @@ async def async_setup_entry(
     async_update_images()
 
 class KeeneticQrWiFiImageEntity(CoordinatorEntity[KeeneticRouterRcInterfaceCoordinator], ImageEntity):
-    """Representation of a Keenetic WiFi QR code image entity."""
 
     _attr_has_entity_name = True
     _attr_content_type = "image/png"
@@ -102,7 +96,6 @@ class KeeneticQrWiFiImageEntity(CoordinatorEntity[KeeneticRouterRcInterfaceCoord
         interface_id: str,
         interface_name: str,
     ) -> None:
-        """Initialize the QR code image entity."""
         super().__init__(coordinator)
         ImageEntity.__init__(self, coordinator.hass)
         self._interface_id = interface_id
@@ -112,14 +105,12 @@ class KeeneticQrWiFiImageEntity(CoordinatorEntity[KeeneticRouterRcInterfaceCoord
         _LOGGER.debug(f"Initialized QR code entity for {interface_name} with ID {interface_id}")
         
     async def async_image(self) -> bytes | None:
-        """Return bytes of image."""
         if self._interface_id not in self.coordinator.data:
             _LOGGER.warning(f"Interface {self._interface_id} not found in coordinator data")
             return None
             
         interface_data = self.coordinator.data[self._interface_id]
-        
-        # Check that this is a WiFi interface with SSID
+
         if not hasattr(interface_data, 'ssid') or not interface_data.ssid:
             _LOGGER.warning(f"Interface {self._interface_id} has no SSID")
             return None
@@ -139,7 +130,6 @@ class KeeneticQrWiFiImageEntity(CoordinatorEntity[KeeneticRouterRcInterfaceCoord
 
     @property
     def available(self) -> bool:
-        """Return True if entity is available."""
         if self._interface_id not in self.coordinator.data:
             return False
             
@@ -148,12 +138,10 @@ class KeeneticQrWiFiImageEntity(CoordinatorEntity[KeeneticRouterRcInterfaceCoord
 
     @property
     def device_info(self) -> DeviceInfo:
-        """Return the device info for grouping entities."""
         return self.coordinator.device_info
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return extra attributes of the image."""
         if self._interface_id not in self.coordinator.data:
             return {}
             

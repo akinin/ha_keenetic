@@ -45,7 +45,6 @@ class KeeneticUpdateEntity(CoordinatorEntity[KeeneticRouterFirmwareCoordinator],
     _attr_has_entity_name = True
     _attr_device_class = UpdateDeviceClass.FIRMWARE
     _attr_entity_category=EntityCategory.CONFIG
-    # _attr_available=False
 
     def __init__(
         self,
@@ -66,31 +65,25 @@ class KeeneticUpdateEntity(CoordinatorEntity[KeeneticRouterFirmwareCoordinator],
 
     @property
     def title(self) -> str | None:
-        """Title channel."""
         return self.coordinator.data.get('channel')
 
     @property
     def installed_version(self) -> str | None:
-        """Version currently in use."""
         return self.coordinator.data.get("current").get("title")
 
     @property
     def latest_version(self) -> str | None:
-        """Latest version available for install."""
         return self.coordinator.data.get("new").get("title")
 
     @property
     def in_progress(self) -> bool:
-        """Update installation in progress."""
         return self._in_progress_old_version == self.installed_version
 
     @property
     def release_url(self) -> str | None:
-        """Release summary."""
         return self.coordinator.data.get("release_notes")
 
     async def async_install(self, version: str | None, backup: bool, **kwargs: Any) -> None:
-        """Install the latest firmware version."""
         self._in_progress_old_version = self.installed_version
         self.async_write_ha_state()
         try:

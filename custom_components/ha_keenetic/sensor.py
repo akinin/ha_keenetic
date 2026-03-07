@@ -40,7 +40,6 @@ _LOGGER = logging.getLogger(__name__)
 
 @dataclass(frozen=True, kw_only=True)
 class KeeneticRouterSensorEntityDescription(SensorEntityDescription):
-    """A class that describes sensor entities."""
     value: Callable[[KeeneticFullData, Any], Any] = (
         lambda coordinator, key: coordinator.data.show_system[key] if coordinator.data.show_system[key] is not None else None
     )
@@ -48,18 +47,15 @@ class KeeneticRouterSensorEntityDescription(SensorEntityDescription):
 
 
 def convert_uptime(uptime: int) -> datetime:
-    """Convert uptime."""
     if uptime != None:
         return (datetime.now(tz=UTC) - timedelta(seconds=int(uptime))).replace(second=0, microsecond=0)
     else:
         return None
 
 def convert_data_size(data_size: int = 0) -> float:
-    """Convert data_size."""
     return round(data_size/1024/1024, 3)
 
 def ind_wan_ip_address(fdata: KeeneticFullData):
-    """Определение внешнего IP адреса."""
     try:
         data_p_i = fdata.priority_interface
         show_interface = fdata.show_interface
@@ -123,11 +119,9 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up the Keenetic sensor."""
     coordinator = hass.data[DOMAIN][entry.entry_id][COORD_FULL]
     sensors = []
     
-    # Добавляем сенсоры из SENSOR_TYPES
     for description in SENSOR_TYPES:
         try:
             if description.value(coordinator, description.key) is not None:
@@ -135,7 +129,6 @@ async def async_setup_entry(
         except Exception as err:
             _LOGGER.debug(f'async_setup_entry sensor SENSOR_TYPES {description} err - {err}')
 
-    # Добавляем сенсоры для Mesh-узлов
     if coordinator.router.hw_type == "router":
         try:
             _LOGGER.debug("Attempting to get mesh nodes")
@@ -161,7 +154,6 @@ async def async_setup_entry(
     async_add_entities(sensors, False)
 
 class KeeneticMeshNodeSensor(CoordinatorEntity[KeeneticRouterCoordinator], SensorEntity):
-    """Representation of a Keenetic Mesh Node sensor."""
     
     _attr_has_entity_name = True
     MESH_NODE_PREFIX = "mesh_node_"
@@ -172,7 +164,6 @@ class KeeneticMeshNodeSensor(CoordinatorEntity[KeeneticRouterCoordinator], Senso
         node_id: str,
         node_data: dict,
     ) -> None:
-        """Initialize the mesh node sensor."""
         super().__init__(coordinator)
         self._node_id = node_id
         self._node_data = node_data
@@ -200,17 +191,14 @@ class KeeneticMeshNodeSensor(CoordinatorEntity[KeeneticRouterCoordinator], Senso
         ICON_MESH_NODE = "mdi:access-point"
         ICON_MESH_NODE_OFFLINE = "mdi:access-point-off"
         
-        # Используем данные, которые уже есть в _node_data
         return ICON_MESH_NODE if self._node_data.get("status") == "connected" else ICON_MESH_NODE_OFFLINE
     
     @property
     def native_value(self):
-        """Return the state of the sensor."""
         return self._node_data.get("status", "unknown")
     
     @property
     def extra_state_attributes(self):
-        """Return the state attributes."""
         attributes = self._node_data.get("attributes", {})
         
         result = {
@@ -257,12 +245,10 @@ class KeeneticRouterSensor(CoordinatorEntity[KeeneticRouterCoordinator], SensorE
 
     @property
     def native_value(self) -> StateType:
-        """Sensor value."""
         return self.entity_description.value(self.coordinator, self.obj_id)
 
     @property
     def extra_state_attributes(self) -> dict[str, str] | None:
-        """Return the state attributes of the sensor."""
         if self.entity_description.attributes_fn is not None:
             return self.entity_description.attributes_fn(self.coordinator.data)
         else:

@@ -5,14 +5,12 @@ from typing import Dict, Any, Callable
 _LOGGER = logging.getLogger(__name__)
 
 class EthernetProcessor:
-    """Process Ethernet ports data from Keenetic router."""
     
     @staticmethod
     async def process_ethernet_ports(
             interface_info: dict, 
             get_statistics_fn: Callable
         ) -> Dict[str, Any]:
-        """Process Ethernet ports and return formatted data."""
         processed_ports = {}
         try:
             wan_interface = None
