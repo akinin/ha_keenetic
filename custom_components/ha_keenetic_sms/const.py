@@ -2,7 +2,7 @@
 
 from typing import Final
 
-DOMAIN: Final = "ha_keenetic"
+DOMAIN: Final = "ha_keenetic_sms"
 
 MIN_SCAN_INTERVAL: Final = 1
 DEFAULT_SCAN_INTERVAL: Final = 30

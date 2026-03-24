@@ -1,5 +1,5 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/v/release/akinin/ha_keenetic?style=flat&color=%23A349A4)](https://github.com/akinin/ha_keenetic)
+[![GitHub Release](https://img.shields.io/github/v/release/akinin/ha_keenetic_sms?style=flat&color=%23A349A4)](https://github.com/akinin/ha_keenetic_sms)
 # Интеграция Keenetic Router для Home Assistant
 [English ver.](README.md)
 
@@ -29,7 +29,7 @@
 ### Ручная установка
 
 1. Скачайте последний релиз
-2. Скопируйте папку `ha_keenetic` в директорию `custom_components`
+2. Скопируйте папку `ha_keenetic_sms` в директорию `custom_components`
 3. Перезагрузите Home Assistant
 
 ### Важные моменты
@@ -107,10 +107,10 @@
 - Счетчик SMS по modem-интерфейсам с атрибутами последнего сообщения
 
 ### Сервисы
-- `ha_keenetic.read_sms` - прочитать список SMS по интерфейсу модема
-- `ha_keenetic.read_sms_item` - прочитать SMS по идентификатору
-- `ha_keenetic.send_sms` - отправить SMS через модем
-- `ha_keenetic.delete_sms` - удалить SMS по идентификатору
+- `ha_keenetic_sms.read_sms` - прочитать список SMS по интерфейсу модема
+- `ha_keenetic_sms.read_sms_item` - прочитать SMS по идентификатору
+- `ha_keenetic_sms.send_sms` - отправить SMS через модем
+- `ha_keenetic_sms.delete_sms` - удалить SMS по идентификатору
 
 ### Переключатели
 - WiFi сети (включение/выключение)

@@ -1,5 +1,5 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/v/release/akinin/ha_keenetic?style=flat&color=%23A349A4)](https://github.com/akinin/ha_keenetic)
+[![GitHub Release](https://img.shields.io/github/v/release/akinin/ha_keenetic_sms?style=flat&color=%23A349A4)](https://github.com/akinin/ha_keenetic_sms)
 # Keenetic Router Integration for Home Assistant
 [Russian ver.](README_RU.md)
 
@@ -28,7 +28,7 @@ This is a Home Assistant custom integration for Keenetic Routers. It provides de
 ### Manual Installation
 
 1. Download the latest release
-2. Copy the `ha_keenetic` folder to your `custom_components` directory
+2. Copy the `ha_keenetic_sms` folder to your `custom_components` directory
 3. Restart Home Assistant
 
 ### Important Points
@@ -105,10 +105,10 @@ Other Keenetic models should also work.
 - SMS counters for modem interfaces with latest-message attributes
 
 ### Services
-- `ha_keenetic.read_sms` - read modem SMS list for an interface
-- `ha_keenetic.read_sms_item` - read a modem SMS by ID
-- `ha_keenetic.send_sms` - send SMS through a modem
-- `ha_keenetic.delete_sms` - delete a modem SMS by ID
+- `ha_keenetic_sms.read_sms` - read modem SMS list for an interface
+- `ha_keenetic_sms.read_sms_item` - read a modem SMS by ID
+- `ha_keenetic_sms.send_sms` - send SMS through a modem
+- `ha_keenetic_sms.delete_sms` - delete a modem SMS by ID
 
 ### Switches
 - WiFi networks (enable/disable)

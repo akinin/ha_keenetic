@@ -3,12 +3,12 @@ request_api:
     device_id:
       selector:
         device:
-          integration: ha_keenetic
+          integration: ha_keenetic_sms
           manufacturer: Keenetic Ltd.
     entry_id:
       selector:
         config_entry:
-          integration: ha_keenetic
+          integration: ha_keenetic_sms
     method:
       required: true
       selector:
@@ -30,12 +30,12 @@ backup_router:
     device_id:
       selector:
         device:
-          integration: ha_keenetic
+          integration: ha_keenetic_sms
           manufacturer: Keenetic Ltd.
     entry_id:
       selector:
         config_entry:
-          integration: ha_keenetic
+          integration: ha_keenetic_sms
     folder:
       required: true
       selector:
@@ -56,12 +56,12 @@ read_sms:
     device_id:
       selector:
         device:
-          integration: ha_keenetic
+          integration: ha_keenetic_sms
           manufacturer: Keenetic Ltd.
     entry_id:
       selector:
         config_entry:
-          integration: ha_keenetic
+          integration: ha_keenetic_sms
     interface:
       required: false
       example: "UsbLte0"
@@ -82,12 +82,12 @@ send_sms:
     device_id:
       selector:
         device:
-          integration: ha_keenetic
+          integration: ha_keenetic_sms
           manufacturer: Keenetic Ltd.
     entry_id:
       selector:
         config_entry:
-          integration: ha_keenetic
+          integration: ha_keenetic_sms
     interface:
       required: true
       example: "UsbQmi0"
@@ -108,12 +108,12 @@ read_sms_item:
     device_id:
       selector:
         device:
-          integration: ha_keenetic
+          integration: ha_keenetic_sms
           manufacturer: Keenetic Ltd.
     entry_id:
       selector:
         config_entry:
-          integration: ha_keenetic
+          integration: ha_keenetic_sms
     interface:
       required: true
       example: "UsbQmi0"
@@ -129,12 +129,12 @@ delete_sms:
     device_id:
       selector:
         device:
-          integration: ha_keenetic
+          integration: ha_keenetic_sms
           manufacturer: Keenetic Ltd.
     entry_id:
       selector:
         config_entry:
-          integration: ha_keenetic
+          integration: ha_keenetic_sms
     interface:
       required: true
       example: "UsbQmi0"
