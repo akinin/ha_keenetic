@@ -150,6 +150,19 @@ async def async_setup_entry(
                 _LOGGER.debug("No mesh nodes found")
         except Exception as ex:
             _LOGGER.error(f"Error setting up mesh node sensors: {ex}", exc_info=True)
+
+        try:
+            modem_sms = coordinator.data.show_modem_sms
+            for interface_id, messages in modem_sms.items():
+                sensors.append(
+                    KeeneticModemSmsSensor(
+                        coordinator,
+                        interface_id,
+                        messages,
+                    )
+                )
+        except Exception as ex:
+            _LOGGER.error(f"Error setting up modem SMS sensors: {ex}", exc_info=True)
     
     async_add_entities(sensors, False)
 
@@ -253,3 +266,54 @@ class KeeneticRouterSensor(CoordinatorEntity[KeeneticRouterCoordinator], SensorE
             return self.entity_description.attributes_fn(self.coordinator.data)
         else:
             return None
+
+
+class KeeneticModemSmsSensor(CoordinatorEntity[KeeneticRouterCoordinator], SensorEntity):
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: KeeneticRouterCoordinator,
+        interface_id: str,
+        messages: list[dict[str, Any]],
+    ) -> None:
+        super().__init__(coordinator)
+        self._interface_id = interface_id
+        self._messages = messages
+
+        self._attr_name = interface_id
+        self._attr_translation_key = "modem_sms"
+        self._attr_translation_placeholders = {"name": interface_id}
+        self._attr_unique_id = f"{coordinator.unique_id}_sms_{interface_id}"
+        self._attr_device_info = coordinator.device_info
+
+        device_name = coordinator.router.model.lower().replace(' ', '_')
+        interface_slug = interface_id.lower().replace("/", "_").replace("-", "_")
+        self.entity_id = f"sensor.{device_name}_sms_{interface_slug}"
+
+    @property
+    def available(self) -> bool:
+        return self._interface_id in self.coordinator.data.show_modem_sms
+
+    @property
+    def native_value(self) -> StateType:
+        messages = self.coordinator.data.show_modem_sms.get(self._interface_id, [])
+        return len(messages)
+
+    @property
+    def icon(self) -> str:
+        return "mdi:message-text"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        messages = self.coordinator.data.show_modem_sms.get(self._interface_id, [])
+        latest_message = messages[0] if messages else {}
+
+        return {
+            "interface": self._interface_id,
+            "messages": messages,
+            "latest_sender": latest_message.get("sender", ""),
+            "latest_text": latest_message.get("text", ""),
+            "latest_timestamp": latest_message.get("timestamp", ""),
+            "latest_status": latest_message.get("status", ""),
+        }

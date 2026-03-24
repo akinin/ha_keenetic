@@ -78,6 +78,77 @@
           "name": "Тип резервной копии:"
         }
       }
+    },
+    "read_sms": {
+      "name": "Прочитать SMS с модема.",
+      "fields": {
+        "device_id": {
+          "name": "Устройство:"
+        },
+        "entry_id": {
+          "name": "Интеграция:"
+        },
+        "interface": {
+          "name": "Интерфейс модема:"
+        },
+        "folder": {
+          "name": "Папка:"
+        }
+      }
+    },
+    "send_sms": {
+      "name": "Отправить SMS через модем.",
+      "fields": {
+        "device_id": {
+          "name": "Устройство:"
+        },
+        "entry_id": {
+          "name": "Интеграция:"
+        },
+        "interface": {
+          "name": "Интерфейс модема:"
+        },
+        "phone": {
+          "name": "Номер:"
+        },
+        "text": {
+          "name": "Текст:"
+        }
+      }
+    },
+    "read_sms_item": {
+      "name": "Прочитать SMS по идентификатору.",
+      "fields": {
+        "device_id": {
+          "name": "Устройство:"
+        },
+        "entry_id": {
+          "name": "Интеграция:"
+        },
+        "interface": {
+          "name": "Интерфейс модема:"
+        },
+        "sms_id": {
+          "name": "ID SMS:"
+        }
+      }
+    },
+    "delete_sms": {
+      "name": "Удалить SMS с модема.",
+      "fields": {
+        "device_id": {
+          "name": "Устройство:"
+        },
+        "entry_id": {
+          "name": "Интеграция:"
+        },
+        "interface": {
+          "name": "Интерфейс модема:"
+        },
+        "sms_id": {
+          "name": "ID SMS:"
+        }
+      }
     }
   },
   "entity": {
@@ -111,6 +182,9 @@
       },
       "wan_ip_address": {
         "name": "Внешний IP"
+      },
+      "modem_sms": {
+        "name": "SMS {name}"
       }
     },
     "binary_sensor": {

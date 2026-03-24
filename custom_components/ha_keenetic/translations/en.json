@@ -78,6 +78,77 @@
           "name": "Backup type:"
         }
       }
+    },
+    "read_sms": {
+      "name": "Read modem SMS.",
+      "fields": {
+        "device_id": {
+          "name": "Device:"
+        },
+        "entry_id": {
+          "name": "Integration:"
+        },
+        "interface": {
+          "name": "Modem interface:"
+        },
+        "folder": {
+          "name": "Folder:"
+        }
+      }
+    },
+    "send_sms": {
+      "name": "Send SMS via modem.",
+      "fields": {
+        "device_id": {
+          "name": "Device:"
+        },
+        "entry_id": {
+          "name": "Integration:"
+        },
+        "interface": {
+          "name": "Modem interface:"
+        },
+        "phone": {
+          "name": "Phone number:"
+        },
+        "text": {
+          "name": "Text:"
+        }
+      }
+    },
+    "read_sms_item": {
+      "name": "Read SMS by identifier.",
+      "fields": {
+        "device_id": {
+          "name": "Device:"
+        },
+        "entry_id": {
+          "name": "Integration:"
+        },
+        "interface": {
+          "name": "Modem interface:"
+        },
+        "sms_id": {
+          "name": "SMS ID:"
+        }
+      }
+    },
+    "delete_sms": {
+      "name": "Delete modem SMS.",
+      "fields": {
+        "device_id": {
+          "name": "Device:"
+        },
+        "entry_id": {
+          "name": "Integration:"
+        },
+        "interface": {
+          "name": "Modem interface:"
+        },
+        "sms_id": {
+          "name": "SMS ID:"
+        }
+      }
     }
   },
   "entity": {
@@ -111,6 +182,9 @@
       },
       "wan_ip_address": {
         "name": "External IP"
+      },
+      "modem_sms": {
+        "name": "SMS {name}"
       }
     },
     "binary_sensor": {

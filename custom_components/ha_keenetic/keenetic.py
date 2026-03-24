@@ -8,6 +8,7 @@ import asyncio
 import aiohttp
 import logging
 import aiofiles.os
+import re
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -26,6 +27,7 @@ class KeeneticFullData:
     show_rc_system_usb: dict[str, Any]
     show_media: dict[str, Any]
     stat_interface: dict[str, Any]
+    show_modem_sms: dict[str, list[dict[str, Any]]]
 
 @dataclass
 class DataDevice():
@@ -71,6 +73,7 @@ INTERFACES_WIFI_NAME = {
 
 LIST_INTERFACES = [
     "UsbModem",
+    "UsbQmi",
     "Davicom",
     "UsbLte",
     "Yota",
@@ -84,6 +87,13 @@ LIST_INTERFACES = [
     "GigabitEthernet",
     "Ethernet",
 ]
+
+MODEM_INTERFACES = {
+    "UsbModem",
+    "UsbQmi",
+    "UsbLte",
+    "Yota",
+}
 
 class Router:
     def __init__(
@@ -263,6 +273,8 @@ class Router:
                 elif res.status == 200 and res.content_type == 'application/javascript':
                     result = await res.text()
                     result = self.data_parser(result)
+                elif res.status == 200 and res.content_type.startswith("text/"):
+                    result = await res.text()
                 else:
                     result = res
                 _LOGGER.debug(f'{self._mac} status - {endpoint} {res.status}')
@@ -334,6 +346,271 @@ class Router:
         except Exception as ex:
             _LOGGER.error(f"Error processing USB ports: {ex}", exc_info=True)
             return {}
+
+    def get_modem_interface_ids(self, interfaces: Mapping[str, Any] | None = None) -> list[str]:
+        interfaces = interfaces or {}
+        modem_interfaces = []
+        for interface_id, interface_data in interfaces.items():
+            interface_type = interface_data.get("type")
+            if interface_type in MODEM_INTERFACES:
+                modem_interfaces.append(interface_id)
+        return modem_interfaces
+
+    def _extract_sms_payload(self, response: Any) -> list[dict[str, Any]]:
+        if isinstance(response, list):
+            return [item for item in response if isinstance(item, dict)]
+
+        if not isinstance(response, dict):
+            return []
+
+        for key in ("sms", "messages", "message", "items", "inbox", "outbox"):
+            value = response.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+            if isinstance(value, dict):
+                nested = self._extract_sms_payload(value)
+                if nested:
+                    return nested
+
+        for value in response.values():
+            if isinstance(value, dict):
+                nested = self._extract_sms_payload(value)
+                if nested:
+                    return nested
+            elif isinstance(value, list) and value and all(isinstance(item, dict) for item in value):
+                sample_keys = set().union(*(item.keys() for item in value[:3]))
+                if sample_keys.intersection({"text", "body", "message", "phone", "sender", "number"}):
+                    return value
+
+        return []
+
+    def _parse_cli_sms_output(self, response: str) -> dict[str, Any]:
+        stats: dict[str, Any] = {}
+        messages: list[dict[str, Any]] = []
+        current_message: dict[str, Any] | None = None
+        current_field: str | None = None
+
+        for raw_line in response.splitlines():
+            line = raw_line.rstrip()
+            stripped = line.strip()
+            if not stripped or stripped.startswith("(config)>"):
+                continue
+
+            msg_match = re.match(r"messages,\s*id\s*=\s*(.+?):$", stripped, re.IGNORECASE)
+            if msg_match:
+                current_message = {"id": msg_match.group(1).strip()}
+                messages.append(current_message)
+                current_field = None
+                continue
+
+            key, sep, value = stripped.partition(":")
+            if sep:
+                normalized_key = key.strip().lower().replace(" ", "-")
+                normalized_value = value.strip()
+                if current_message is None:
+                    stats[normalized_key] = normalized_value
+                else:
+                    current_message[normalized_key] = normalized_value
+                current_field = normalized_key
+                continue
+
+            if current_message is not None and current_field:
+                existing_value = current_message.get(current_field, "")
+                current_message[current_field] = f"{existing_value}\n{stripped}".strip()
+
+        if messages:
+            return {"messages": messages, "stats": stats}
+
+        if stats:
+            return {"messages": [stats], "stats": {}}
+
+        return {"messages": [], "stats": {}}
+
+    def _normalize_sms_message(self, message: dict[str, Any], default_id: int | str) -> dict[str, Any]:
+        sender = (
+            message.get("from")
+            or message.get("sender")
+            or message.get("phone")
+            or message.get("number")
+            or message.get("address")
+            or ""
+        )
+        text = (
+            message.get("text")
+            or message.get("body")
+            or message.get("message")
+            or message.get("content")
+            or ""
+        )
+        timestamp = (
+            message.get("date")
+            or message.get("datetime")
+            or message.get("time")
+            or message.get("received")
+            or message.get("timestamp")
+            or ""
+        )
+        return {
+            "id": message.get("id") or message.get("index") or default_id,
+            "sender": sender,
+            "recipient": message.get("to") or message.get("recipient") or "",
+            "text": text,
+            "status": message.get("status") or message.get("state") or "",
+            "timestamp": timestamp,
+            "parts": message.get("parts"),
+            "total_parts": message.get("total-parts") or message.get("total_parts"),
+            "is_read": message.get("read"),
+            "raw": message,
+        }
+
+    def _normalize_sms_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        normalized_messages = []
+        for index, message in enumerate(messages):
+            normalized_messages.append(self._normalize_sms_message(message, index))
+        return normalized_messages
+
+    def _normalize_sms_response(self, response: Any) -> dict[str, Any]:
+        if isinstance(response, str):
+            parsed = self._parse_cli_sms_output(response)
+            return {
+                "messages": self._normalize_sms_messages(parsed["messages"]),
+                "stats": parsed["stats"],
+                "raw": response,
+            }
+
+        messages = self._extract_sms_payload(response)
+        return {
+            "messages": self._normalize_sms_messages(messages),
+            "stats": {},
+            "raw": response,
+        }
+
+    async def get_modem_sms_details(self, interface: str, folder: str = "inbox") -> dict[str, Any]:
+        endpoints = [
+            f"/rci/show/sms/{interface}/list",
+            f"/rci/show/sms/{interface}/{folder}",
+            f"/rci/show/interface/{interface}/sms/list",
+            f"/rci/show/interface/{interface}/sms",
+            f"/rci/show/interface/{interface}/sms/{folder}",
+            f"/rci/show/interface/{interface}/messages/list",
+            f"/rci/show/interface/{interface}/messages",
+            f"/rci/show/interface/{interface}/messages/{folder}",
+            f"/rci/show/interface/{interface}/modem/sms/list",
+            f"/rci/show/interface/{interface}/modem/sms",
+            f"/rci/show/interface/{interface}/modem/sms/{folder}",
+            f"/rci/show/interface/{interface}/modem/messages/list",
+            f"/rci/show/interface/{interface}/modem/messages",
+            f"/rci/show/interface/{interface}/modem/messages/{folder}",
+        ]
+
+        for endpoint in endpoints:
+            try:
+                response = await self.api("get", endpoint)
+                normalized = self._normalize_sms_response(response)
+                if normalized["messages"] or normalized["stats"]:
+                    _LOGGER.debug("%s modem sms loaded from %s", interface, endpoint)
+                    normalized["endpoint"] = endpoint
+                    return normalized
+            except Exception as ex:
+                _LOGGER.debug("SMS endpoint %s is unavailable for %s: %s", endpoint, interface, ex)
+
+        return {"messages": [], "stats": {}, "raw": None}
+
+    async def get_modem_sms(self, interface: str, folder: str = "inbox") -> list[dict[str, Any]]:
+        details = await self.get_modem_sms_details(interface, folder)
+        return details["messages"]
+
+    async def _call_sms_action(
+        self,
+        interface: str,
+        action: str,
+        payload: Mapping[str, Any] | None = None,
+    ) -> Any:
+        payload = payload or {}
+        endpoints = [
+            f"/rci/sms/{interface}/{action}",
+            f"/rci/interface/{interface}/sms/{action}",
+            f"/rci/interface/{interface}/modem/{action}",
+            f"/rci/interface/{interface}/messages/{action}",
+            f"/rci/interface/{interface}/modem/sms/{action}",
+            f"/rci/interface/{interface}/modem/messages/{action}",
+        ]
+
+        last_error = None
+        for endpoint in endpoints:
+            try:
+                response = await self.api("post", endpoint, payload)
+                if isinstance(response, dict):
+                    return response
+                if isinstance(response, list):
+                    return response
+                if isinstance(response, str):
+                    response_text = response.strip()
+                    if response_text:
+                        return {"status": "success", "endpoint": endpoint, "details": response_text}
+                if hasattr(response, "status") and response.status == 200:
+                    return {"status": "success", "endpoint": endpoint}
+            except Exception as ex:
+                last_error = ex
+                _LOGGER.debug("SMS action endpoint %s is unavailable for %s: %s", endpoint, interface, ex)
+
+        if last_error is not None:
+            raise last_error
+        raise Exception(f"SMS action {action} is not supported for interface {interface}")
+
+    async def send_modem_sms(self, interface: str, phone: str, text: str) -> Any:
+        payloads = [
+            {"to": phone, "text": text},
+            {"phone": phone, "text": text},
+            {"number": phone, "message": text},
+        ]
+
+        last_error = None
+        for payload in payloads:
+            try:
+                return await self._call_sms_action(interface, "send", payload)
+            except Exception as ex:
+                last_error = ex
+
+        if last_error is not None:
+            raise last_error
+        raise Exception(f"Unable to send SMS on interface {interface}")
+
+    async def read_modem_sms(self, interface: str, sms_id: str) -> Any:
+        try:
+            response = await self.api("get", f"/rci/show/sms/{interface}/{sms_id}")
+            normalized = self._normalize_sms_response(response)
+            if normalized["messages"]:
+                return normalized["messages"][0]
+        except Exception as ex:
+            _LOGGER.debug("Unable to read modem sms %s on %s via show sms endpoint: %s", sms_id, interface, ex)
+
+        try:
+            response = await self.api("get", f"/rci/show/interface/{interface}/sms/{sms_id}")
+            normalized = self._normalize_sms_response(response)
+            if normalized["messages"]:
+                return normalized["messages"][0]
+        except Exception as ex:
+            _LOGGER.debug("Unable to read modem sms %s on %s via show endpoint: %s", sms_id, interface, ex)
+
+        response = await self._call_sms_action(interface, "read", {"id": sms_id})
+        normalized = self._normalize_sms_response(response)
+        if normalized["messages"]:
+            return normalized["messages"][0]
+        return response
+
+    async def delete_modem_sms(self, interface: str, sms_id: str) -> Any:
+        return await self._call_sms_action(interface, "delete", {"id": sms_id})
+
+    async def get_all_modem_sms(self, interfaces: Mapping[str, Any] | None = None) -> dict[str, list[dict[str, Any]]]:
+        interfaces = interfaces or await self.show_interface()
+        modem_interfaces = self.get_modem_interface_ids(interfaces)
+        modem_sms: dict[str, list[dict[str, Any]]] = {}
+
+        for interface_id in modem_interfaces:
+            modem_sms[interface_id] = await self.get_modem_sms(interface_id)
+
+        return modem_sms
 
     async def api(self, method: str, endpoint: str, json: Mapping[str, Any] | None = {}):
         resp = await self.auth()
@@ -513,6 +790,7 @@ class Router:
         show_rc_system_usb = full_info_other[3]['show']['rc']['system'].get('usb', [])
         show_rc_ip_http = full_info_other[4]['show']['rc']['ip']['http']
         show_media = full_info_other[5]['show'].get('media', {})
+        show_modem_sms = {}
 
         show_ip_hotspot = {}
         show_rc_ip_static = {}
@@ -559,6 +837,11 @@ class Router:
             for hotspot_pl in data_show_ip_hotspot_policy:
                 show_ip_hotspot_policy[hotspot_pl["mac"]] = hotspot_pl
 
+            try:
+                show_modem_sms = await self.get_all_modem_sms(show_interface)
+            except Exception as ex:
+                _LOGGER.debug("%s unable to load modem sms: %s", self._mac, ex)
+
         stat_interface = await self.show_stat_interface()
 
         return KeeneticFullData(
@@ -573,4 +856,5 @@ class Router:
             show_rc_system_usb,
             show_media,
             stat_interface,
+            show_modem_sms,
             )

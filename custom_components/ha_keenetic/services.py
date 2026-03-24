@@ -22,6 +22,10 @@ _LOGGER = logging.getLogger(__name__)
 SUPPORTED_SERVICES = [
     "request_api",
     "backup_router",
+    "read_sms",
+    "send_sms",
+    "read_sms_item",
+    "delete_sms",
 ]
 
 
@@ -30,6 +34,10 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     services = {
         "request_api": request_api,
         "backup_router": backup_router,
+        "read_sms": read_sms,
+        "send_sms": send_sms,
+        "read_sms_item": read_sms_item,
+        "delete_sms": delete_sms,
     }
 
     async def async_call_keenetic_service(service_call: ServiceCall) -> None:
@@ -74,3 +82,40 @@ async def request_api(hass: HomeAssistant, entry_id: str, data: Mapping[str, Any
 async def backup_router(hass: HomeAssistant, entry_id: str, data: Mapping[str, Any]):
     response = await hass.data[DOMAIN][entry_id][CROUTER].async_backup(data["folder"], data["type"])
     return {"response": "success"}
+
+
+async def read_sms(hass: HomeAssistant, entry_id: str, data: Mapping[str, Any]):
+    router = hass.data[DOMAIN][entry_id][CROUTER]
+    interface = data.get("interface")
+    folder = data.get("folder", "inbox")
+
+    if interface:
+        sms_data = await router.get_modem_sms_details(interface, folder)
+        return {
+            "interface": interface,
+            "folder": folder,
+            "messages": sms_data["messages"],
+            "stats": sms_data.get("stats", {}),
+            "endpoint": sms_data.get("endpoint"),
+        }
+
+    messages = await router.get_all_modem_sms()
+    return {"messages": messages}
+
+
+async def send_sms(hass: HomeAssistant, entry_id: str, data: Mapping[str, Any]):
+    router = hass.data[DOMAIN][entry_id][CROUTER]
+    response = await router.send_modem_sms(data["interface"], data["phone"], data["text"])
+    return {"response": response}
+
+
+async def read_sms_item(hass: HomeAssistant, entry_id: str, data: Mapping[str, Any]):
+    router = hass.data[DOMAIN][entry_id][CROUTER]
+    response = await router.read_modem_sms(data["interface"], data["sms_id"])
+    return {"message": response}
+
+
+async def delete_sms(hass: HomeAssistant, entry_id: str, data: Mapping[str, Any]):
+    router = hass.data[DOMAIN][entry_id][CROUTER]
+    response = await router.delete_modem_sms(data["interface"], data["sms_id"])
+    return {"response": response}

@@ -51,3 +51,97 @@ backup_router:
           options:
             - firmware
             - config
+read_sms:
+  fields:
+    device_id:
+      selector:
+        device:
+          integration: ha_keenetic
+          manufacturer: Keenetic Ltd.
+    entry_id:
+      selector:
+        config_entry:
+          integration: ha_keenetic
+    interface:
+      required: false
+      example: "UsbLte0"
+      selector:
+        text:
+    folder:
+      required: false
+      example: "inbox"
+      default: "inbox"
+      selector:
+        select:
+          options:
+            - inbox
+            - outbox
+            - all
+send_sms:
+  fields:
+    device_id:
+      selector:
+        device:
+          integration: ha_keenetic
+          manufacturer: Keenetic Ltd.
+    entry_id:
+      selector:
+        config_entry:
+          integration: ha_keenetic
+    interface:
+      required: true
+      example: "UsbQmi0"
+      selector:
+        text:
+    phone:
+      required: true
+      example: "+79817207400"
+      selector:
+        text:
+    text:
+      required: true
+      example: "hello world!"
+      selector:
+        text:
+read_sms_item:
+  fields:
+    device_id:
+      selector:
+        device:
+          integration: ha_keenetic
+          manufacturer: Keenetic Ltd.
+    entry_id:
+      selector:
+        config_entry:
+          integration: ha_keenetic
+    interface:
+      required: true
+      example: "UsbQmi0"
+      selector:
+        text:
+    sms_id:
+      required: true
+      example: "nv-0"
+      selector:
+        text:
+delete_sms:
+  fields:
+    device_id:
+      selector:
+        device:
+          integration: ha_keenetic
+          manufacturer: Keenetic Ltd.
+    entry_id:
+      selector:
+        config_entry:
+          integration: ha_keenetic
+    interface:
+      required: true
+      example: "UsbQmi0"
+      selector:
+        text:
+    sms_id:
+      required: true
+      example: "nv-0"
+      selector:
+        text:

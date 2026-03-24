@@ -12,6 +12,7 @@ This is a Home Assistant custom integration for Keenetic Routers. It provides de
 - View ethernet port status and statistics
 - Monitor mesh network nodes
 - View detailed interface statistics
+- Send and read SMS through Keenetic USB/LTE modem interfaces
 
 ## Installation
 
@@ -101,6 +102,13 @@ Other Keenetic models should also work.
 - WiFi networks status
 - Ethernet ports status
 - Mesh network nodes status
+- SMS counters for modem interfaces with latest-message attributes
+
+### Services
+- `ha_keenetic.read_sms` - read modem SMS list for an interface
+- `ha_keenetic.read_sms_item` - read a modem SMS by ID
+- `ha_keenetic.send_sms` - send SMS through a modem
+- `ha_keenetic.delete_sms` - delete a modem SMS by ID
 
 ### Switches
 - WiFi networks (enable/disable)
