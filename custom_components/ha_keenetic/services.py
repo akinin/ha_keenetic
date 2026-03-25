@@ -29,6 +29,16 @@ SUPPORTED_SERVICES = [
 ]
 
 
+def _get_sms_interface(router, data: Mapping[str, Any]) -> str:
+    interface = data.get("interface") or router.get_default_sms_interface()
+    if not interface:
+        raise ServiceValidationError(
+            "Не указан SMS интерфейс модема. Задайте interface в сервисе или в настройках интеграции.",
+            DOMAIN,
+        )
+    return interface
+
+
 async def async_setup_services(hass: HomeAssistant) -> None:
 
     services = {
@@ -86,7 +96,7 @@ async def backup_router(hass: HomeAssistant, entry_id: str, data: Mapping[str, A
 
 async def read_sms(hass: HomeAssistant, entry_id: str, data: Mapping[str, Any]):
     router = hass.data[DOMAIN][entry_id][CROUTER]
-    interface = data.get("interface")
+    interface = data.get("interface") or router.get_default_sms_interface()
     folder = data.get("folder", "inbox")
 
     if interface:
@@ -96,7 +106,8 @@ async def read_sms(hass: HomeAssistant, entry_id: str, data: Mapping[str, Any]):
             "folder": folder,
             "messages": sms_data["messages"],
             "stats": sms_data.get("stats", {}),
-            "endpoint": sms_data.get("endpoint"),
+            "transport": sms_data.get("transport"),
+            "command": sms_data.get("command"),
         }
 
     messages = await router.get_all_modem_sms()
@@ -105,17 +116,20 @@ async def read_sms(hass: HomeAssistant, entry_id: str, data: Mapping[str, Any]):
 
 async def send_sms(hass: HomeAssistant, entry_id: str, data: Mapping[str, Any]):
     router = hass.data[DOMAIN][entry_id][CROUTER]
-    response = await router.send_modem_sms(data["interface"], data["phone"], data["text"])
+    interface = _get_sms_interface(router, data)
+    response = await router.send_modem_sms(interface, data["phone"], data["text"])
     return {"response": response}
 
 
 async def read_sms_item(hass: HomeAssistant, entry_id: str, data: Mapping[str, Any]):
     router = hass.data[DOMAIN][entry_id][CROUTER]
-    response = await router.read_modem_sms(data["interface"], data["sms_id"])
+    interface = _get_sms_interface(router, data)
+    response = await router.read_modem_sms(interface, data["sms_id"])
     return {"message": response}
 
 
 async def delete_sms(hass: HomeAssistant, entry_id: str, data: Mapping[str, Any]):
     router = hass.data[DOMAIN][entry_id][CROUTER]
-    response = await router.delete_modem_sms(data["interface"], data["sms_id"])
+    interface = _get_sms_interface(router, data)
+    response = await router.delete_modem_sms(interface, data["sms_id"])
     return {"response": response}

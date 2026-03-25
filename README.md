@@ -14,6 +14,11 @@ This is a Home Assistant custom integration for Keenetic Routers. It provides de
 - View detailed interface statistics
 - Send and read SMS through Keenetic USB/LTE modem interfaces
 
+The SMS block is fully optional:
+- disabled by default
+- can use a custom SSH port for CLI access
+- can use a manually specified modem interface such as `UsbQmi0`
+
 ## Installation
 
 ### HACS (Recommended)
@@ -28,7 +33,7 @@ This is a Home Assistant custom integration for Keenetic Routers. It provides de
 ### Manual Installation
 
 1. Download the latest release
-2. Copy the `ha_keenetic_sms` folder to your `custom_components` directory
+2. Copy the `ha_keenetic` folder to your `custom_components` directory
 3. Restart Home Assistant
 
 ### Important Points
@@ -105,10 +110,34 @@ Other Keenetic models should also work.
 - SMS counters for modem interfaces with latest-message attributes
 
 ### Services
-- `ha_keenetic_sms.read_sms` - read modem SMS list for an interface
-- `ha_keenetic_sms.read_sms_item` - read a modem SMS by ID
-- `ha_keenetic_sms.send_sms` - send SMS through a modem
-- `ha_keenetic_sms.delete_sms` - delete a modem SMS by ID
+- `ha_keenetic.read_sms` - read modem SMS list for an interface
+- `ha_keenetic.read_sms_item` - read a modem SMS by ID
+- `ha_keenetic.send_sms` - send SMS through a modem
+- `ha_keenetic.delete_sms` - delete a modem SMS by ID
+
+### Events
+- `ha_keenetic_new_sms` - Home Assistant event fired when a new SMS appears after the first successful poll
+- When `Publish new SMS to MQTT` is enabled, the integration also publishes JSON to `<mqtt_topic_base>/incoming`
+
+Example automation to publish incoming SMS into MQTT:
+
+```yaml
+alias: Keenetic SMS to MQTT
+trigger:
+  - platform: event
+    event_type: ha_keenetic_new_sms
+action:
+  - service: mqtt.publish
+    data:
+      topic: keenetic/sms/incoming
+      payload: >
+        {{ {
+          "router": trigger.event.data.router_name,
+          "interface": trigger.event.data.interface,
+          "message": trigger.event.data.message
+        } | tojson }}
+mode: queued
+```
 
 ### Switches
 - WiFi networks (enable/disable)

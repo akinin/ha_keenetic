@@ -33,13 +33,23 @@
           "create_device_tracker": "Создать объекты device_tracker для всех устройств.",
           "create_select_device_tracker": "Создать объекты device_tracker для выбранных устройств:",
           "create_entity_port_forwarding": "Создать переключатели для всех правил перенаправления портов.",
-          "backup_type_file": "Типы файлов резервного копирования:"
+          "backup_type_file": "Типы файлов резервного копирования:",
+          "enable_sms": "Включить работу с SMS.",
+          "sms_interface": "Интерфейс модема для SMS:",
+          "sms_ssh_port": "SSH порт для CLI SMS:",
+          "mqtt_publish_sms": "Публиковать новые SMS в MQTT.",
+          "mqtt_topic_base": "Базовый MQTT topic:"
         }
       },
       "configure_other": {
         "description": "Дополнительные настройки.",
         "data": {
-          "scan_interval": "Интервал скарирования (секунд)"
+          "scan_interval": "Интервал скарирования (секунд)",
+          "enable_sms": "Включить работу с SMS.",
+          "sms_interface": "Интерфейс модема для SMS:",
+          "sms_ssh_port": "SSH порт для CLI SMS:",
+          "mqtt_publish_sms": "Публиковать новые SMS в MQTT.",
+          "mqtt_topic_base": "Базовый MQTT topic:"
         }
       }
     }

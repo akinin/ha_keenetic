@@ -1,14 +1,14 @@
 {
-  "domain": "ha_keenetic_sms",
-  "name": "Keenetic Router SMS",
+  "domain": "ha_keenetic",
+  "name": "Keenetic Router",
   "codeowners": ["@akinin"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/akinin/ha_keenetic_sms",
+  "documentation": "https://github.com/akinin/ha_keenetic",
   "integration_type": "hub",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/akinin/ha_keenetic_sms/issues",
-  "requirements": ["pyqrcode==1.2.1", "pypng==0.20220715.0"],
+  "issue_tracker": "https://github.com/akinin/ha_keenetic/issues",
+  "requirements": ["pyqrcode==1.2.1", "pypng==0.20220715.0", "asyncssh==2.21.0"],
   "ssdp": [
       {
         "st": "urn:schemas-upnp-org:device:InternetGatewayDevice:1",

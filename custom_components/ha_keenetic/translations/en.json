@@ -33,13 +33,23 @@
           "create_device_tracker": "Create device_tracker objects for all devices.",
           "create_select_device_tracker": "Create device_tracker objects for selected devices:",
           "create_entity_port_forwarding": "Create switches for all port forwarding rules.",
-          "backup_type_file": "Backup file types:"
+          "backup_type_file": "Backup file types:",
+          "enable_sms": "Enable SMS support.",
+          "sms_interface": "Modem interface for SMS:",
+          "sms_ssh_port": "SSH port for SMS CLI:",
+          "mqtt_publish_sms": "Publish new SMS to MQTT.",
+          "mqtt_topic_base": "Base MQTT topic:"
         }
       },
       "configure_other": {
         "description": "Additional settings.",
         "data": {
-          "scan_interval": "Scan interval (seconds)"
+          "scan_interval": "Scan interval (seconds)",
+          "enable_sms": "Enable SMS support.",
+          "sms_interface": "Modem interface for SMS:",
+          "sms_ssh_port": "SSH port for SMS CLI:",
+          "mqtt_publish_sms": "Publish new SMS to MQTT.",
+          "mqtt_topic_base": "Base MQTT topic:"
         }
       }
     }

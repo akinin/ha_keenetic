@@ -15,6 +15,11 @@
 - Просмотр детальной статистики интерфейсов
 - Отправка и чтение SMS через USB/LTE-модем Keenetic
 
+SMS-блок полностью опционален:
+- по умолчанию выключен
+- можно указать свой SSH-порт для CLI
+- можно вручную задать интерфейс модема, например `UsbQmi0`
+
 ## Установка
 
 ### Через HACS (Рекомендуется)
@@ -29,7 +34,7 @@
 ### Ручная установка
 
 1. Скачайте последний релиз
-2. Скопируйте папку `ha_keenetic_sms` в директорию `custom_components`
+2. Скопируйте папку `ha_keenetic` в директорию `custom_components`
 3. Перезагрузите Home Assistant
 
 ### Важные моменты
@@ -107,10 +112,34 @@
 - Счетчик SMS по modem-интерфейсам с атрибутами последнего сообщения
 
 ### Сервисы
-- `ha_keenetic_sms.read_sms` - прочитать список SMS по интерфейсу модема
-- `ha_keenetic_sms.read_sms_item` - прочитать SMS по идентификатору
-- `ha_keenetic_sms.send_sms` - отправить SMS через модем
-- `ha_keenetic_sms.delete_sms` - удалить SMS по идентификатору
+- `ha_keenetic.read_sms` - прочитать список SMS по интерфейсу модема
+- `ha_keenetic.read_sms_item` - прочитать SMS по идентификатору
+- `ha_keenetic.send_sms` - отправить SMS через модем
+- `ha_keenetic.delete_sms` - удалить SMS по идентификатору
+
+### События
+- `ha_keenetic_new_sms` - событие Home Assistant при появлении нового SMS после первого успешного опроса
+- При включенной опции `Публиковать новые SMS в MQTT` интеграция сама публикует JSON в `<mqtt_topic_base>/incoming`
+
+Пример automation для публикации SMS в MQTT:
+
+```yaml
+alias: Keenetic SMS to MQTT
+trigger:
+  - platform: event
+    event_type: ha_keenetic_new_sms
+action:
+  - service: mqtt.publish
+    data:
+      topic: keenetic/sms/incoming
+      payload: >
+        {{ {
+          "router": trigger.event.data.router_name,
+          "interface": trigger.event.data.interface,
+          "message": trigger.event.data.message
+        } | tojson }}
+mode: queued
+```
 
 ### Переключатели
 - WiFi сети (включение/выключение)

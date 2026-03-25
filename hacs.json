@@ -1,8 +1,8 @@
 {
-  "name": "Keenetic Router SMS",
+  "name": "Keenetic Router",
   "homeassistant": "2023.1",
   "country": ["ALL"],
   "render_readme": true,
   "zip_release": true,
-  "filename": "ha_keenetic_sms.zip"
+  "filename": "ha_keenetic.zip"
 }

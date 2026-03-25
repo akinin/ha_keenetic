@@ -46,6 +46,10 @@ from .const import (
     CONF_CREATE_PORT_FRW,
     CONF_CREATE_IMAGE_QR,
     CONF_SELECT_CREATE_DT,
+    CONF_ENABLE_SMS,
+    CONF_SMS_INTERFACE,
+    CONF_SMS_SSH_PORT,
+    DEFAULT_SMS_SSH_PORT,
 )
 
 PLATFORMS: list[Platform] = [
@@ -64,6 +68,11 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Keenetic API from a config entry."""
     client = await get_api(hass, entry.data)
+    client.configure_sms(
+        enabled=entry.options.get(CONF_ENABLE_SMS, False),
+        interface=entry.options.get(CONF_SMS_INTERFACE, ""),
+        ssh_port=entry.options.get(CONF_SMS_SSH_PORT, DEFAULT_SMS_SSH_PORT),
+    )
 
     coordinator_full = KeeneticRouterCoordinator(hass, client, entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL), entry)
     await coordinator_full.async_config_entry_first_refresh()
@@ -160,6 +169,12 @@ def remove_entities_or_devices(hass, entry) -> None:
             and entity.translation_key == "client_policy"
             and not entry.options.get(CONF_CREATE_ALL_CLIENTS_POLICY, False) 
             and hass.states.get(entity.entity_id).attributes.get("mac") not in entry.options.get(CONF_CLIENTS_SELECT_POLICY, []) 
+        ):
+            delete_ent = True
+        elif (
+            entity.domain == "sensor"
+            and entity.translation_key == "modem_sms"
+            and not entry.options.get(CONF_ENABLE_SMS, False)
         ):
             delete_ent = True
         if delete_ent:

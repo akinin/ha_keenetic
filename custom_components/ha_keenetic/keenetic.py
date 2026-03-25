@@ -6,11 +6,14 @@ from collections.abc import Mapping
 from typing import Literal, Any
 import asyncio
 import aiohttp
+import asyncssh
 import logging
 import aiofiles.os
 import re
+import shlex
 from pathlib import Path
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -111,6 +114,11 @@ class Router:
         self._username = username
         self._password = password
         self.request_interface = {}
+        self._ssh_lock = asyncio.Lock()
+        self._ssh_port = 22
+        self._ssh_host = self._normalize_ssh_host(host)
+        self._sms_enabled = False
+        self._sms_interface = ""
 
         self._mac = ""
         self._serial_number = ""
@@ -153,6 +161,53 @@ class Router:
     @property
     def domainname(self):
         return self._domainname
+
+    def _normalize_ssh_host(self, host: str) -> str:
+        if "://" in host:
+            parsed = urlsplit(host)
+            if parsed.hostname:
+                return parsed.hostname
+        return host.split("/")[0]
+
+    async def _run_ssh_command(self, command: str) -> str:
+        async with self._ssh_lock:
+            _LOGGER.debug("%s ssh sms command - %s", self._mac, command)
+            async with asyncssh.connect(
+                self._ssh_host,
+                port=self._ssh_port,
+                username=self._username,
+                password=self._password,
+                known_hosts=None,
+                client_keys=None,
+            ) as conn:
+                result = await conn.run(command, check=False)
+
+            stdout = (result.stdout or "").strip()
+            stderr = (result.stderr or "").strip()
+            output = stdout or stderr
+
+            if result.exit_status not in (0, None) and not output:
+                raise Exception(
+                    f"SSH command failed with exit status {result.exit_status}: {command}"
+                )
+
+            if not output and result.exit_status not in (0, None):
+                raise Exception(stderr or f"SSH command failed: {command}")
+
+            return output
+
+    def configure_sms(
+        self,
+        enabled: bool = False,
+        interface: str = "",
+        ssh_port: int = 22,
+    ) -> None:
+        self._sms_enabled = enabled
+        self._sms_interface = interface.strip()
+        self._ssh_port = ssh_port
+
+    def get_default_sms_interface(self) -> str:
+        return self._sms_interface
 
 
     async def async_setup_obj(self):
@@ -426,6 +481,12 @@ class Router:
 
         return {"messages": [], "stats": {}}
 
+    def _clean_sms_text(self, value: str) -> str:
+        # Keenetic CLI may append ANSI/terminal cleanup sequences to wrapped SMS text.
+        cleaned = value.replace("\\e[K", "").replace("\x1b[K", "")
+        cleaned = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", cleaned)
+        return cleaned.strip()
+
     def _normalize_sms_message(self, message: dict[str, Any], default_id: int | str) -> dict[str, Any]:
         sender = (
             message.get("from")
@@ -442,6 +503,7 @@ class Router:
             or message.get("content")
             or ""
         )
+        text = self._clean_sms_text(text)
         timestamp = (
             message.get("date")
             or message.get("datetime")
@@ -486,35 +548,12 @@ class Router:
         }
 
     async def get_modem_sms_details(self, interface: str, folder: str = "inbox") -> dict[str, Any]:
-        endpoints = [
-            f"/rci/show/sms/{interface}/list",
-            f"/rci/show/sms/{interface}/{folder}",
-            f"/rci/show/interface/{interface}/sms/list",
-            f"/rci/show/interface/{interface}/sms",
-            f"/rci/show/interface/{interface}/sms/{folder}",
-            f"/rci/show/interface/{interface}/messages/list",
-            f"/rci/show/interface/{interface}/messages",
-            f"/rci/show/interface/{interface}/messages/{folder}",
-            f"/rci/show/interface/{interface}/modem/sms/list",
-            f"/rci/show/interface/{interface}/modem/sms",
-            f"/rci/show/interface/{interface}/modem/sms/{folder}",
-            f"/rci/show/interface/{interface}/modem/messages/list",
-            f"/rci/show/interface/{interface}/modem/messages",
-            f"/rci/show/interface/{interface}/modem/messages/{folder}",
-        ]
-
-        for endpoint in endpoints:
-            try:
-                response = await self.api("get", endpoint)
-                normalized = self._normalize_sms_response(response)
-                if normalized["messages"] or normalized["stats"]:
-                    _LOGGER.debug("%s modem sms loaded from %s", interface, endpoint)
-                    normalized["endpoint"] = endpoint
-                    return normalized
-            except Exception as ex:
-                _LOGGER.debug("SMS endpoint %s is unavailable for %s: %s", endpoint, interface, ex)
-
-        return {"messages": [], "stats": {}, "raw": None}
+        response = await self._run_ssh_command(f"sms {shlex.quote(interface)} list")
+        normalized = self._normalize_sms_response(response)
+        normalized["transport"] = "ssh"
+        normalized["command"] = f"sms {interface} list"
+        normalized["folder"] = folder
+        return normalized
 
     async def get_modem_sms(self, interface: str, folder: str = "inbox") -> list[dict[str, Any]]:
         details = await self.get_modem_sms_details(interface, folder)
@@ -559,50 +598,47 @@ class Router:
         raise Exception(f"SMS action {action} is not supported for interface {interface}")
 
     async def send_modem_sms(self, interface: str, phone: str, text: str) -> Any:
-        payloads = [
-            {"to": phone, "text": text},
-            {"phone": phone, "text": text},
-            {"number": phone, "message": text},
-        ]
-
-        last_error = None
-        for payload in payloads:
-            try:
-                return await self._call_sms_action(interface, "send", payload)
-            except Exception as ex:
-                last_error = ex
-
-        if last_error is not None:
-            raise last_error
-        raise Exception(f"Unable to send SMS on interface {interface}")
+        command = (
+            f"sms {shlex.quote(interface)} send "
+            f"{shlex.quote(phone)} {shlex.quote(text)}"
+        )
+        response = await self._run_ssh_command(command)
+        return {
+            "status": "success",
+            "transport": "ssh",
+            "command": f"sms {interface} send {phone} <text>",
+            "details": response,
+        }
 
     async def read_modem_sms(self, interface: str, sms_id: str) -> Any:
-        try:
-            response = await self.api("get", f"/rci/show/sms/{interface}/{sms_id}")
-            normalized = self._normalize_sms_response(response)
-            if normalized["messages"]:
-                return normalized["messages"][0]
-        except Exception as ex:
-            _LOGGER.debug("Unable to read modem sms %s on %s via show sms endpoint: %s", sms_id, interface, ex)
-
-        try:
-            response = await self.api("get", f"/rci/show/interface/{interface}/sms/{sms_id}")
-            normalized = self._normalize_sms_response(response)
-            if normalized["messages"]:
-                return normalized["messages"][0]
-        except Exception as ex:
-            _LOGGER.debug("Unable to read modem sms %s on %s via show endpoint: %s", sms_id, interface, ex)
-
-        response = await self._call_sms_action(interface, "read", {"id": sms_id})
+        command = f"sms {shlex.quote(interface)} read {shlex.quote(sms_id)}"
+        response = await self._run_ssh_command(command)
         normalized = self._normalize_sms_response(response)
         if normalized["messages"]:
             return normalized["messages"][0]
-        return response
+        return {
+            "transport": "ssh",
+            "command": f"sms {interface} read {sms_id}",
+            "details": response,
+        }
 
     async def delete_modem_sms(self, interface: str, sms_id: str) -> Any:
-        return await self._call_sms_action(interface, "delete", {"id": sms_id})
+        command = f"sms {shlex.quote(interface)} delete {shlex.quote(sms_id)}"
+        response = await self._run_ssh_command(command)
+        return {
+            "status": "success",
+            "transport": "ssh",
+            "command": f"sms {interface} delete {sms_id}",
+            "details": response,
+        }
 
     async def get_all_modem_sms(self, interfaces: Mapping[str, Any] | None = None) -> dict[str, list[dict[str, Any]]]:
+        if not self._sms_enabled:
+            return {}
+
+        if self._sms_interface:
+            return {self._sms_interface: await self.get_modem_sms(self._sms_interface)}
+
         interfaces = interfaces or await self.show_interface()
         modem_interfaces = self.get_modem_interface_ids(interfaces)
         modem_sms: dict[str, list[dict[str, Any]]] = {}

@@ -40,6 +40,13 @@ from .const import (
     DEFAULT_BACKUP_TYPE_FILE,
     CONF_BACKUP_TYPE_FILE,
     CONF_SELECT_CREATE_DT,
+    CONF_MQTT_PUBLISH_SMS,
+    CONF_MQTT_TOPIC_BASE,
+    DEFAULT_MQTT_TOPIC_BASE,
+    CONF_ENABLE_SMS,
+    CONF_SMS_INTERFACE,
+    CONF_SMS_SSH_PORT,
+    DEFAULT_SMS_SSH_PORT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -208,6 +215,26 @@ class OptionsFlow(config_entries.OptionsFlow):
                         "config",
                         "firmware",
                     ]),
+                    vol.Optional(
+                        CONF_ENABLE_SMS,
+                        default=self._options.get(CONF_ENABLE_SMS, False),
+                    ): bool,
+                    vol.Optional(
+                        CONF_SMS_INTERFACE,
+                        default=self._options.get(CONF_SMS_INTERFACE, ""),
+                    ): cv.string,
+                    vol.Optional(
+                        CONF_SMS_SSH_PORT,
+                        default=self._options.get(CONF_SMS_SSH_PORT, DEFAULT_SMS_SSH_PORT),
+                    ): vol.All(cv.positive_int, vol.Clamp(min=1, max=65535)),
+                    vol.Optional(
+                        CONF_MQTT_PUBLISH_SMS,
+                        default=self._options.get(CONF_MQTT_PUBLISH_SMS, False),
+                    ): bool,
+                    vol.Optional(
+                        CONF_MQTT_TOPIC_BASE,
+                        default=self._options.get(CONF_MQTT_TOPIC_BASE, DEFAULT_MQTT_TOPIC_BASE),
+                    ): cv.string,
                 }
             ),
             last_step=False,
@@ -230,7 +257,27 @@ class OptionsFlow(config_entries.OptionsFlow):
                         default=self._options.get(
                             CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
                         ),
-                    ): vol.All(cv.positive_int, vol.Clamp(min=MIN_SCAN_INTERVAL))
+                    ): vol.All(cv.positive_int, vol.Clamp(min=MIN_SCAN_INTERVAL)),
+                    vol.Optional(
+                        CONF_ENABLE_SMS,
+                        default=self._options.get(CONF_ENABLE_SMS, False),
+                    ): bool,
+                    vol.Optional(
+                        CONF_SMS_INTERFACE,
+                        default=self._options.get(CONF_SMS_INTERFACE, ""),
+                    ): cv.string,
+                    vol.Optional(
+                        CONF_SMS_SSH_PORT,
+                        default=self._options.get(CONF_SMS_SSH_PORT, DEFAULT_SMS_SSH_PORT),
+                    ): vol.All(cv.positive_int, vol.Clamp(min=1, max=65535)),
+                    vol.Optional(
+                        CONF_MQTT_PUBLISH_SMS,
+                        default=self._options.get(CONF_MQTT_PUBLISH_SMS, False),
+                    ): bool,
+                    vol.Optional(
+                        CONF_MQTT_TOPIC_BASE,
+                        default=self._options.get(CONF_MQTT_TOPIC_BASE, DEFAULT_MQTT_TOPIC_BASE),
+                    ): cv.string,
                 }
             ),
             last_step=False,

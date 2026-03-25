@@ -4,7 +4,9 @@ from __future__ import annotations
 from datetime import timedelta
 import logging
 import asyncio
+import json
 
+from homeassistant.components.mqtt import async_publish as mqtt_async_publish
 from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator, 
     UpdateFailed,
@@ -22,6 +24,10 @@ from .const import (
     SCAN_INTERVAL_FIREWARE,
     COUNT_REPEATED_REQUEST_FIREWARE,
     TIMER_REPEATED_REQUEST_FIREWARE,
+    EVENT_NEW_SMS,
+    CONF_MQTT_PUBLISH_SMS,
+    CONF_MQTT_TOPIC_BASE,
+    DEFAULT_MQTT_TOPIC_BASE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,11 +45,81 @@ class KeeneticRouterCoordinator(DataUpdateCoordinator):
         self.entry = entry
         self._host = entry.data[CONF_HOST]
         self.unique_id = f"{entry.unique_id}_full"
+        self._known_sms_signatures: dict[str, set[str]] = {}
         super().__init__(
             hass,
             _LOGGER,
             name=f"{DOMAIN}-{self._host}-full",
             update_interval=timedelta(seconds=update_interval),
+        )
+
+    def _message_signature(self, message: dict) -> str:
+        return "|".join(
+            [
+                str(message.get("id", "")),
+                str(message.get("timestamp", "")),
+                str(message.get("sender", "")),
+                str(message.get("text", "")),
+            ]
+        )
+
+    def _process_new_sms(self, full_data) -> None:
+        current_signatures: dict[str, set[str]] = {}
+
+        for interface_id, messages in full_data.show_modem_sms.items():
+            current_signatures[interface_id] = {
+                self._message_signature(message) for message in messages
+            }
+
+        if not self._known_sms_signatures:
+            self._known_sms_signatures = current_signatures
+            return
+
+        for interface_id, messages in full_data.show_modem_sms.items():
+            known = self._known_sms_signatures.get(interface_id, set())
+            for message in messages:
+                signature = self._message_signature(message)
+                if signature in known:
+                    continue
+
+                self.hass.bus.async_fire(
+                    EVENT_NEW_SMS,
+                    {
+                        "entry_id": self.entry.entry_id,
+                        "router_mac": self.router.mac,
+                        "router_name": self.entry.title,
+                        "interface": interface_id,
+                        "message": message,
+                    },
+                )
+                self._publish_sms_to_mqtt(interface_id, message)
+                _LOGGER.debug(
+                    "%s new sms on %s: %s",
+                    self.router.mac,
+                    interface_id,
+                    message.get("id"),
+                )
+
+        self._known_sms_signatures = current_signatures
+
+    def _publish_sms_to_mqtt(self, interface_id: str, message: dict) -> None:
+        if not self.entry.options.get(CONF_MQTT_PUBLISH_SMS, False):
+            return
+
+        topic_base = self.entry.options.get(CONF_MQTT_TOPIC_BASE, DEFAULT_MQTT_TOPIC_BASE).strip("/")
+        topic = f"{topic_base}/incoming"
+        payload = {
+            "entry_id": self.entry.entry_id,
+            "router_mac": self.router.mac,
+            "router_name": self.entry.title,
+            "interface": interface_id,
+            "message": message,
+        }
+
+        mqtt_async_publish(
+            self.hass,
+            topic,
+            json.dumps(payload, ensure_ascii=False),
         )
 
     async def _async_update_data(self):
@@ -61,6 +137,7 @@ class KeeneticRouterCoordinator(DataUpdateCoordinator):
                 pass
         if _errr != None:
             raise UpdateFailed(f"{self.router.mac} UpdateFailed (err {_errr})")
+        self._process_new_sms(full_data)
         return full_data
 
     @property
