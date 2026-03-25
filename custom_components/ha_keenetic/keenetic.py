@@ -209,6 +209,10 @@ class Router:
     def get_default_sms_interface(self) -> str:
         return self._sms_interface
 
+    def _quote_sms_cli_arg(self, value: str) -> str:
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        return f'"{escaped}"'
+
 
     async def async_setup_obj(self):
         await self.auth()
@@ -600,7 +604,7 @@ class Router:
     async def send_modem_sms(self, interface: str, phone: str, text: str) -> Any:
         command = (
             f"sms {shlex.quote(interface)} send "
-            f"{shlex.quote(phone)} {shlex.quote(text)}"
+            f"{self._quote_sms_cli_arg(phone)} {self._quote_sms_cli_arg(text)}"
         )
         response = await self._run_ssh_command(command)
         return {
