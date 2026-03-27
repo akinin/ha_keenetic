@@ -70,6 +70,12 @@
                     "disconnected": "mdi:access-point-off",
                     "unknown": "mdi:access-point-remove"
                 }
+            },
+            "modem_sms_last_sender": {
+                "default": "mdi:account"
+            },
+            "modem_sms_last_text": {
+                "default": "mdi:message-text-outline"
             }
         },
         "binary_sensor": {

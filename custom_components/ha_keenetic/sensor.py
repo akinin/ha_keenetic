@@ -5,6 +5,7 @@ from collections.abc import Callable
 from typing import Any
 from datetime import UTC, datetime, timedelta
 import logging
+import re
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -69,6 +70,46 @@ def ind_wan_ip_address(fdata: KeeneticFullData):
     except Exception as ex:
         _LOGGER.debug(f'Not ind_wan_ip_address - {ex}')
         return None
+
+
+def get_latest_sms_message(messages: list[dict[str, Any]]) -> dict[str, Any]:
+    if not messages:
+        return {}
+
+    def _parse_ts(value: Any) -> datetime | None:
+        if not value:
+            return None
+        if isinstance(value, datetime):
+            return value
+        if not isinstance(value, str):
+            return None
+        try:
+            # Keenetic CLI timestamp format: Mon Mar 23 11:18:52 2026
+            return datetime.strptime(value, "%a %b %d %H:%M:%S %Y")
+        except ValueError:
+            return None
+
+    def _id_num(value: Any) -> int:
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str):
+            match = re.search(r"(\d+)$", value)
+            if match:
+                return int(match.group(1))
+        return -1
+
+    best_idx = 0
+    best_key: tuple[datetime, int, int] | None = None
+
+    for idx, message in enumerate(messages):
+        ts = _parse_ts(message.get("timestamp")) or datetime.min
+        id_num = _id_num(message.get("id"))
+        key = (ts, id_num, idx)
+        if best_key is None or key > best_key:
+            best_key = key
+            best_idx = idx
+
+    return messages[best_idx]
 
 
 SENSOR_TYPES: tuple[KeeneticRouterSensorEntityDescription, ...] = (
@@ -159,6 +200,18 @@ async def async_setup_entry(
                         coordinator,
                         interface_id,
                         messages,
+                    )
+                )
+                sensors.append(
+                    KeeneticModemSmsLastSenderSensor(
+                        coordinator,
+                        interface_id,
+                    )
+                )
+                sensors.append(
+                    KeeneticModemSmsLastTextSensor(
+                        coordinator,
+                        interface_id,
                     )
                 )
         except Exception as ex:
@@ -307,7 +360,7 @@ class KeeneticModemSmsSensor(CoordinatorEntity[KeeneticRouterCoordinator], Senso
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         messages = self.coordinator.data.show_modem_sms.get(self._interface_id, [])
-        latest_message = messages[0] if messages else {}
+        latest_message = get_latest_sms_message(messages)
 
         return {
             "interface": self._interface_id,
@@ -317,3 +370,73 @@ class KeeneticModemSmsSensor(CoordinatorEntity[KeeneticRouterCoordinator], Senso
             "latest_timestamp": latest_message.get("timestamp", ""),
             "latest_status": latest_message.get("status", ""),
         }
+
+
+class KeeneticModemSmsLastSenderSensor(CoordinatorEntity[KeeneticRouterCoordinator], SensorEntity):
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: KeeneticRouterCoordinator,
+        interface_id: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._interface_id = interface_id
+
+        self._attr_translation_key = "modem_sms_last_sender"
+        self._attr_translation_placeholders = {"name": interface_id}
+        self._attr_unique_id = f"{coordinator.unique_id}_sms_last_sender_{interface_id}"
+        self._attr_device_info = coordinator.device_info
+
+        device_name = coordinator.router.model.lower().replace(" ", "_")
+        interface_slug = interface_id.lower().replace("/", "_").replace("-", "_")
+        self.entity_id = f"sensor.{device_name}_sms_last_sender_{interface_slug}"
+
+    @property
+    def available(self) -> bool:
+        return self._interface_id in self.coordinator.data.show_modem_sms
+
+    @property
+    def native_value(self) -> StateType:
+        messages = self.coordinator.data.show_modem_sms.get(self._interface_id, [])
+        latest_message = get_latest_sms_message(messages)
+        return latest_message.get("sender", "")
+
+    @property
+    def icon(self) -> str:
+        return "mdi:account"
+
+
+class KeeneticModemSmsLastTextSensor(CoordinatorEntity[KeeneticRouterCoordinator], SensorEntity):
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: KeeneticRouterCoordinator,
+        interface_id: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self._interface_id = interface_id
+
+        self._attr_translation_key = "modem_sms_last_text"
+        self._attr_translation_placeholders = {"name": interface_id}
+        self._attr_unique_id = f"{coordinator.unique_id}_sms_last_text_{interface_id}"
+        self._attr_device_info = coordinator.device_info
+
+        device_name = coordinator.router.model.lower().replace(" ", "_")
+        interface_slug = interface_id.lower().replace("/", "_").replace("-", "_")
+        self.entity_id = f"sensor.{device_name}_sms_last_text_{interface_slug}"
+
+    @property
+    def available(self) -> bool:
+        return self._interface_id in self.coordinator.data.show_modem_sms
+
+    @property
+    def native_value(self) -> StateType:
+        messages = self.coordinator.data.show_modem_sms.get(self._interface_id, [])
+        latest_message = get_latest_sms_message(messages)
+        return latest_message.get("text", "")
+
+    @property
+    def icon(self) -> str:
+        return "mdi:message-text-outline"

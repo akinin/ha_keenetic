@@ -195,6 +195,12 @@
       },
       "modem_sms": {
         "name": "SMS {name}"
+      },
+      "modem_sms_last_sender": {
+        "name": "SMS {name} sender"
+      },
+      "modem_sms_last_text": {
+        "name": "SMS {name} text"
       }
     },
     "binary_sensor": {
