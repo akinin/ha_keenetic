@@ -118,6 +118,9 @@ Other Keenetic models should also work.
 ### Events
 - `ha_keenetic_new_sms` - Home Assistant event fired when a new SMS appears after the first successful poll
 - When `Publish new SMS to MQTT` is enabled, the integration also publishes JSON to `<mqtt_topic_base>/incoming`
+- Optional `SMS sender whitelist` filters MQTT publishing by sender number/name (comma, space, `;` or newline separated)
+- Optional OpenClaw mode publishes `{ senderId, text, sessionId }` to `OpenClaw inbound topic`
+- Optional OpenClaw outbound bridge subscribes to `OpenClaw outbound topic` and sends replies back as modem SMS
 
 Example automation to publish incoming SMS into MQTT:
 

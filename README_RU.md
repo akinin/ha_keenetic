@@ -120,6 +120,9 @@ SMS-блок полностью опционален:
 ### События
 - `ha_keenetic_new_sms` - событие Home Assistant при появлении нового SMS после первого успешного опроса
 - При включенной опции `Публиковать новые SMS в MQTT` интеграция сама публикует JSON в `<mqtt_topic_base>/incoming`
+- Опциональный `Белый список отправителей SMS` фильтрует публикацию в MQTT по номеру/имени отправителя (разделители: запятая, пробел, `;`, новая строка)
+- Опциональный режим OpenClaw публикует `{ senderId, text, sessionId }` в `OpenClaw inbound topic`
+- Опциональный OpenClaw outbound bridge подписывается на `OpenClaw outbound topic` и отправляет ответы обратно через SMS модема
 
 Пример automation для публикации SMS в MQTT:
 

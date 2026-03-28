@@ -76,6 +76,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator_full = KeeneticRouterCoordinator(hass, client, entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL), entry)
     await coordinator_full.async_config_entry_first_refresh()
+    await coordinator_full.async_setup_mqtt_bridge()
 
     coordinator_firmware = KeeneticRouterFirmwareCoordinator(hass, client, SCAN_INTERVAL_FIREWARE, entry)
     await coordinator_firmware.async_refresh()
@@ -109,6 +110,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     coordinator_full = hass.data[DOMAIN][entry.entry_id][COORD_FULL]
+    await coordinator_full.async_shutdown_mqtt_bridge()
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
         async_unload_services(hass)

@@ -213,6 +213,56 @@ class Router:
         escaped = value.replace("\\", "\\\\").replace('"', '\\"')
         return f'"{escaped}"'
 
+    def _prepare_sms_text_for_cli(self, text: str) -> str:
+        # Keenetic CLI parser is sensitive to multiline payloads and control chars.
+        normalized = str(text or "")
+        normalized = normalized.replace("\r", " ").replace("\n", " ").replace("\t", " ")
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+        return normalized
+
+    def _ucs2_units(self, text: str) -> int:
+        # UCS-2 symbol count is effectively UTF-16 code units for BMP text.
+        return len(str(text).encode("utf-16-le")) // 2
+
+    def _split_sms_text(self, text: str, max_units: int = 660) -> list[str]:
+        source = str(text or "").strip()
+        if not source:
+            return []
+        if self._ucs2_units(source) <= max_units:
+            return [source]
+
+        parts: list[str] = []
+        words = source.split(" ")
+        current = ""
+
+        for word in words:
+            candidate = f"{current} {word}".strip() if current else word
+            if self._ucs2_units(candidate) <= max_units:
+                current = candidate
+                continue
+
+            if current:
+                parts.append(current)
+                current = ""
+
+            # If a single word is too long, split by characters.
+            chunk = ""
+            for ch in word:
+                cand = f"{chunk}{ch}"
+                if self._ucs2_units(cand) <= max_units:
+                    chunk = cand
+                else:
+                    if chunk:
+                        parts.append(chunk)
+                    chunk = ch
+            if chunk:
+                current = chunk
+
+        if current:
+            parts.append(current)
+
+        return parts
+
 
     async def async_setup_obj(self):
         await self.auth()
@@ -602,16 +652,27 @@ class Router:
         raise Exception(f"SMS action {action} is not supported for interface {interface}")
 
     async def send_modem_sms(self, interface: str, phone: str, text: str) -> Any:
-        command = (
-            f"sms {shlex.quote(interface)} send "
-            f"{self._quote_sms_cli_arg(phone)} {self._quote_sms_cli_arg(text)}"
-        )
-        response = await self._run_ssh_command(command)
+        prepared_text = self._prepare_sms_text_for_cli(text)
+        if not prepared_text:
+            raise Exception("SMS text is empty after normalization")
+        parts = self._split_sms_text(prepared_text, 660)
+        responses: list[str] = []
+        for part in parts:
+            command = (
+                f"sms {shlex.quote(interface)} send "
+                f"{self._quote_sms_cli_arg(phone)} {self._quote_sms_cli_arg(part)}"
+            )
+            response = await self._run_ssh_command(command)
+            lowered = response.lower()
+            if "error" in lowered or "parse error" in lowered or "argument parse error" in lowered:
+                raise Exception(response)
+            responses.append(response)
         return {
             "status": "success",
             "transport": "ssh",
             "command": f"sms {interface} send {phone} <text>",
-            "details": response,
+            "parts": len(parts),
+            "details": "\n".join(responses),
         }
 
     async def read_modem_sms(self, interface: str, sms_id: str) -> Any:

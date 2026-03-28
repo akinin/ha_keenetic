@@ -27,6 +27,12 @@ CONF_SMS_INTERFACE: Final = "sms_interface"
 CONF_SMS_SSH_PORT: Final = "sms_ssh_port"
 CONF_MQTT_PUBLISH_SMS: Final = "mqtt_publish_sms"
 CONF_MQTT_TOPIC_BASE: Final = "mqtt_topic_base"
+CONF_MQTT_OPENCLAW_COMPAT: Final = "mqtt_openclaw_compat"
+CONF_MQTT_OPENCLAW_INBOUND_TOPIC: Final = "mqtt_openclaw_inbound_topic"
+CONF_MQTT_OPENCLAW_DEFAULT_SENDER: Final = "mqtt_openclaw_default_sender"
+CONF_MQTT_OPENCLAW_OUTBOUND_BRIDGE: Final = "mqtt_openclaw_outbound_bridge"
+CONF_MQTT_OPENCLAW_OUTBOUND_TOPIC: Final = "mqtt_openclaw_outbound_topic"
+CONF_SMS_PUBLISH_WHITELIST: Final = "sms_publish_whitelist"
 
 FW_SANDBOX: Final = {
     "stable": "main",
@@ -43,6 +49,9 @@ EVENT_NEW_SMS: Final = f"{DOMAIN}_new_sms"
 DEFAULT_BACKUP_TYPE_FILE: Final = ["config"]
 DEFAULT_SMS_SSH_PORT: Final = 22
 DEFAULT_MQTT_TOPIC_BASE: Final = "ha_keenetic"
+DEFAULT_MQTT_OPENCLAW_INBOUND_TOPIC: Final = "openclaw/inbound-admin"
+DEFAULT_MQTT_OPENCLAW_OUTBOUND_TOPIC: Final = "openclaw/outbound-admin"
+DEFAULT_MQTT_OPENCLAW_DEFAULT_SENDER: Final = "ha_keenetic"
 
 COUNT_REPEATED_REQUEST_FIREWARE: Final = 30
 TIMER_REPEATED_REQUEST_FIREWARE: Final = 0.3

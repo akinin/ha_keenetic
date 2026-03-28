@@ -43,6 +43,15 @@ from .const import (
     CONF_MQTT_PUBLISH_SMS,
     CONF_MQTT_TOPIC_BASE,
     DEFAULT_MQTT_TOPIC_BASE,
+    CONF_MQTT_OPENCLAW_COMPAT,
+    CONF_MQTT_OPENCLAW_INBOUND_TOPIC,
+    CONF_MQTT_OPENCLAW_DEFAULT_SENDER,
+    CONF_MQTT_OPENCLAW_OUTBOUND_BRIDGE,
+    CONF_MQTT_OPENCLAW_OUTBOUND_TOPIC,
+    CONF_SMS_PUBLISH_WHITELIST,
+    DEFAULT_MQTT_OPENCLAW_INBOUND_TOPIC,
+    DEFAULT_MQTT_OPENCLAW_OUTBOUND_TOPIC,
+    DEFAULT_MQTT_OPENCLAW_DEFAULT_SENDER,
     CONF_ENABLE_SMS,
     CONF_SMS_INTERFACE,
     CONF_SMS_SSH_PORT,
@@ -235,6 +244,39 @@ class OptionsFlow(config_entries.OptionsFlow):
                         CONF_MQTT_TOPIC_BASE,
                         default=self._options.get(CONF_MQTT_TOPIC_BASE, DEFAULT_MQTT_TOPIC_BASE),
                     ): cv.string,
+                    vol.Optional(
+                        CONF_MQTT_OPENCLAW_COMPAT,
+                        default=self._options.get(CONF_MQTT_OPENCLAW_COMPAT, False),
+                    ): bool,
+                    vol.Optional(
+                        CONF_MQTT_OPENCLAW_INBOUND_TOPIC,
+                        default=self._options.get(
+                            CONF_MQTT_OPENCLAW_INBOUND_TOPIC,
+                            DEFAULT_MQTT_OPENCLAW_INBOUND_TOPIC,
+                        ),
+                    ): cv.string,
+                    vol.Optional(
+                        CONF_MQTT_OPENCLAW_DEFAULT_SENDER,
+                        default=self._options.get(
+                            CONF_MQTT_OPENCLAW_DEFAULT_SENDER,
+                            DEFAULT_MQTT_OPENCLAW_DEFAULT_SENDER,
+                        ),
+                    ): cv.string,
+                    vol.Optional(
+                        CONF_MQTT_OPENCLAW_OUTBOUND_BRIDGE,
+                        default=self._options.get(CONF_MQTT_OPENCLAW_OUTBOUND_BRIDGE, False),
+                    ): bool,
+                    vol.Optional(
+                        CONF_MQTT_OPENCLAW_OUTBOUND_TOPIC,
+                        default=self._options.get(
+                            CONF_MQTT_OPENCLAW_OUTBOUND_TOPIC,
+                            DEFAULT_MQTT_OPENCLAW_OUTBOUND_TOPIC,
+                        ),
+                    ): cv.string,
+                    vol.Optional(
+                        CONF_SMS_PUBLISH_WHITELIST,
+                        default=self._options.get(CONF_SMS_PUBLISH_WHITELIST, ""),
+                    ): cv.string,
                 }
             ),
             last_step=False,
@@ -277,6 +319,39 @@ class OptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(
                         CONF_MQTT_TOPIC_BASE,
                         default=self._options.get(CONF_MQTT_TOPIC_BASE, DEFAULT_MQTT_TOPIC_BASE),
+                    ): cv.string,
+                    vol.Optional(
+                        CONF_MQTT_OPENCLAW_COMPAT,
+                        default=self._options.get(CONF_MQTT_OPENCLAW_COMPAT, False),
+                    ): bool,
+                    vol.Optional(
+                        CONF_MQTT_OPENCLAW_INBOUND_TOPIC,
+                        default=self._options.get(
+                            CONF_MQTT_OPENCLAW_INBOUND_TOPIC,
+                            DEFAULT_MQTT_OPENCLAW_INBOUND_TOPIC,
+                        ),
+                    ): cv.string,
+                    vol.Optional(
+                        CONF_MQTT_OPENCLAW_DEFAULT_SENDER,
+                        default=self._options.get(
+                            CONF_MQTT_OPENCLAW_DEFAULT_SENDER,
+                            DEFAULT_MQTT_OPENCLAW_DEFAULT_SENDER,
+                        ),
+                    ): cv.string,
+                    vol.Optional(
+                        CONF_MQTT_OPENCLAW_OUTBOUND_BRIDGE,
+                        default=self._options.get(CONF_MQTT_OPENCLAW_OUTBOUND_BRIDGE, False),
+                    ): bool,
+                    vol.Optional(
+                        CONF_MQTT_OPENCLAW_OUTBOUND_TOPIC,
+                        default=self._options.get(
+                            CONF_MQTT_OPENCLAW_OUTBOUND_TOPIC,
+                            DEFAULT_MQTT_OPENCLAW_OUTBOUND_TOPIC,
+                        ),
+                    ): cv.string,
+                    vol.Optional(
+                        CONF_SMS_PUBLISH_WHITELIST,
+                        default=self._options.get(CONF_SMS_PUBLISH_WHITELIST, ""),
                     ): cv.string,
                 }
             ),

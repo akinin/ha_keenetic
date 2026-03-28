@@ -38,7 +38,13 @@
           "sms_interface": "Интерфейс модема для SMS:",
           "sms_ssh_port": "SSH порт для CLI SMS:",
           "mqtt_publish_sms": "Публиковать новые SMS в MQTT.",
-          "mqtt_topic_base": "Базовый MQTT topic:"
+          "mqtt_topic_base": "Базовый MQTT topic:",
+          "mqtt_openclaw_compat": "Публиковать в формате OpenClaw mqtt-channel.",
+          "mqtt_openclaw_inbound_topic": "OpenClaw inbound topic:",
+          "mqtt_openclaw_default_sender": "OpenClaw senderId по умолчанию:",
+          "mqtt_openclaw_outbound_bridge": "Отправлять ответы OpenClaw обратно через SMS.",
+          "mqtt_openclaw_outbound_topic": "OpenClaw outbound topic:",
+          "sms_publish_whitelist": "Белый список отправителей SMS (через запятую):"
         }
       },
       "configure_other": {
@@ -49,7 +55,13 @@
           "sms_interface": "Интерфейс модема для SMS:",
           "sms_ssh_port": "SSH порт для CLI SMS:",
           "mqtt_publish_sms": "Публиковать новые SMS в MQTT.",
-          "mqtt_topic_base": "Базовый MQTT topic:"
+          "mqtt_topic_base": "Базовый MQTT topic:",
+          "mqtt_openclaw_compat": "Публиковать в формате OpenClaw mqtt-channel.",
+          "mqtt_openclaw_inbound_topic": "OpenClaw inbound topic:",
+          "mqtt_openclaw_default_sender": "OpenClaw senderId по умолчанию:",
+          "mqtt_openclaw_outbound_bridge": "Отправлять ответы OpenClaw обратно через SMS.",
+          "mqtt_openclaw_outbound_topic": "OpenClaw outbound topic:",
+          "sms_publish_whitelist": "Белый список отправителей SMS (через запятую):"
         }
       }
     }

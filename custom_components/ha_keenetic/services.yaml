@@ -66,7 +66,13 @@ read_sms:
       required: false
       example: "UsbLte0"
       selector:
-        text:
+        select:
+          custom_value: true
+          options:
+            - UsbQmi0
+            - UsbLte0
+            - UsbModem0
+            - Yota0
     folder:
       required: false
       example: "inbox"
@@ -89,10 +95,16 @@ send_sms:
         config_entry:
           integration: ha_keenetic
     interface:
-      required: true
+      required: false
       example: "UsbQmi0"
       selector:
-        text:
+        select:
+          custom_value: true
+          options:
+            - UsbQmi0
+            - UsbLte0
+            - UsbModem0
+            - Yota0
     phone:
       required: true
       example: "+79817207400"
@@ -115,10 +127,16 @@ read_sms_item:
         config_entry:
           integration: ha_keenetic
     interface:
-      required: true
+      required: false
       example: "UsbQmi0"
       selector:
-        text:
+        select:
+          custom_value: true
+          options:
+            - UsbQmi0
+            - UsbLte0
+            - UsbModem0
+            - Yota0
     sms_id:
       required: true
       example: "nv-0"
@@ -136,10 +154,16 @@ delete_sms:
         config_entry:
           integration: ha_keenetic
     interface:
-      required: true
+      required: false
       example: "UsbQmi0"
       selector:
-        text:
+        select:
+          custom_value: true
+          options:
+            - UsbQmi0
+            - UsbLte0
+            - UsbModem0
+            - Yota0
     sms_id:
       required: true
       example: "nv-0"

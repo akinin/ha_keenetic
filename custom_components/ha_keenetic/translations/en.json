@@ -38,7 +38,13 @@
           "sms_interface": "Modem interface for SMS:",
           "sms_ssh_port": "SSH port for SMS CLI:",
           "mqtt_publish_sms": "Publish new SMS to MQTT.",
-          "mqtt_topic_base": "Base MQTT topic:"
+          "mqtt_topic_base": "Base MQTT topic:",
+          "mqtt_openclaw_compat": "Publish in OpenClaw mqtt-channel format.",
+          "mqtt_openclaw_inbound_topic": "OpenClaw inbound topic:",
+          "mqtt_openclaw_default_sender": "Default OpenClaw senderId:",
+          "mqtt_openclaw_outbound_bridge": "Forward OpenClaw replies back via SMS.",
+          "mqtt_openclaw_outbound_topic": "OpenClaw outbound topic:",
+          "sms_publish_whitelist": "SMS sender whitelist (comma separated):"
         }
       },
       "configure_other": {
@@ -49,7 +55,13 @@
           "sms_interface": "Modem interface for SMS:",
           "sms_ssh_port": "SSH port for SMS CLI:",
           "mqtt_publish_sms": "Publish new SMS to MQTT.",
-          "mqtt_topic_base": "Base MQTT topic:"
+          "mqtt_topic_base": "Base MQTT topic:",
+          "mqtt_openclaw_compat": "Publish in OpenClaw mqtt-channel format.",
+          "mqtt_openclaw_inbound_topic": "OpenClaw inbound topic:",
+          "mqtt_openclaw_default_sender": "Default OpenClaw senderId:",
+          "mqtt_openclaw_outbound_bridge": "Forward OpenClaw replies back via SMS.",
+          "mqtt_openclaw_outbound_topic": "OpenClaw outbound topic:",
+          "sms_publish_whitelist": "SMS sender whitelist (comma separated):"
         }
       }
     }
