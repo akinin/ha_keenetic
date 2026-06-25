@@ -8,6 +8,7 @@ MIN_SCAN_INTERVAL: Final = 1
 DEFAULT_SCAN_INTERVAL: Final = 30
 REQUEST_TIMEOUT: Final = 30
 SCAN_INTERVAL_FIREWARE: Final = 1800
+SCAN_INTERVAL_RC_INTERFACE: Final = 1800
 
 COORD_FULL: Final = "coordinator_full"
 COORD_FIREWARE: Final = "coordinator_firmware"

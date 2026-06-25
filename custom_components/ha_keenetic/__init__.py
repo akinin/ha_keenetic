@@ -46,6 +46,7 @@ from .const import (
     CONF_CREATE_PORT_FRW,
     CONF_CREATE_IMAGE_QR,
     CONF_SELECT_CREATE_DT,
+    SCAN_INTERVAL_RC_INTERFACE,
 )
 
 PLATFORMS: list[Platform] = [
@@ -53,10 +54,11 @@ PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.BUTTON,
     Platform.IMAGE,
-    #Platform.BINARY_SENSOR,
+    Platform.BINARY_SENSOR,
     Platform.SELECT,
     Platform.DEVICE_TRACKER,
     Platform.SWITCH,
+    Platform.NUMBER,
 ]
 
 _LOGGER = logging.getLogger(__name__)
@@ -73,7 +75,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator_firmware.async_refresh()
 
     if client.hw_type == "router":
-        coordinator_rc_interface = KeeneticRouterRcInterfaceCoordinator(hass, client, SCAN_INTERVAL_FIREWARE, entry)
+        coordinator_rc_interface = KeeneticRouterRcInterfaceCoordinator(hass, client, SCAN_INTERVAL_RC_INTERFACE, entry)
         await coordinator_rc_interface.async_config_entry_first_refresh()
     else:
         coordinator_rc_interface = None

@@ -122,6 +122,14 @@
       },
       "connected_to_media": {
         "name": "Статус {name}"
+      },
+      "interface_pingcheck": {
+        "name": "{name} PingCheck"
+      }
+    },
+    "number": {
+      "clients_idle_timeout_wifi": {
+        "name": "Таймаут клиентов {name_interface}"
       }
     },
     "image": {

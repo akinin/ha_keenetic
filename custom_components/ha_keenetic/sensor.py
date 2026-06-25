@@ -27,6 +27,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import slugify
 
 from .coordinator import KeeneticRouterCoordinator
 from .keenetic import KeeneticFullData
@@ -250,7 +251,7 @@ class KeeneticRouterSensor(CoordinatorEntity[KeeneticRouterCoordinator], SensorE
         self._attr_translation_key = description.key
         self._attr_translation_placeholders = {"name": f"{obj_name}"}
         
-        device_name = coordinator.router.model.lower().replace(' ', '_')
+        device_name = slugify(coordinator.router.model)
         self.entity_id = f"sensor.{device_name}_{description.key}"
         if obj_id != description.key:
             self.entity_id += f"_{obj_id}"

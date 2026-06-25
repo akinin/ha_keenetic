@@ -26,6 +26,7 @@ class KeeneticFullData:
     show_rc_system_usb: dict[str, Any]
     show_media: dict[str, Any]
     stat_interface: dict[str, Any]
+    show_pingcheck: dict[str, Any]
 
 @dataclass
 class DataDevice():
@@ -62,11 +63,24 @@ class DataRcInterface():
     active: str
     rename: str
     description: str
+    idle_timeout: int
+
+@dataclass
+class DataPingCheck():
+    interface_name: str
+    status: str
+
+CONFIG_SAVE = {"system": {"configuration": {"save": {}}}}
 
 
 INTERFACES_WIFI_NAME = {
     "WifiMaster0": "WiFi %s 2.4G",
-    "WifiMaster1": "WiFi %s 5G"
+    "WifiMaster1": "WiFi %s 5G",
+}
+
+INTERFACES_WIFI_NAME_LIST = {
+    "WifiMaster0": "WiFi 2.4G",
+    "WifiMaster1": "WiFi 5G",
 }
 
 LIST_INTERFACES = [
@@ -81,6 +95,18 @@ LIST_INTERFACES = [
     "Wireguard",
     "OpenVPN",
     "EoIP",
+    "TunnelSixInFour",
+    "SSTPEthernet",
+    "Proxy",
+    "IPIP",
+    "IKE",
+    "Gre",
+    "MapT",
+    "DsLite",
+    "UsbQmi",
+]
+
+LIST_INTERFACES_PUBLIC = [
     "GigabitEthernet",
     "Ethernet",
 ]
@@ -109,6 +135,7 @@ class Router:
         self._hw_id = ""
         self._name_device = ""
         self._fw_branch = None
+        self._usb = []
 
     @property
     def mac(self):
@@ -143,6 +170,9 @@ class Router:
     @property
     def domainname(self):
         return self._domainname
+    @property
+    def usb(self):
+        return self._usb
 
 
     async def async_setup_obj(self):
@@ -162,6 +192,13 @@ class Router:
         data_show_system = await self.show_system()
         self._hostname = data_show_system.get("hostname", "")
         self._domainname = data_show_system.get("domainname", "")
+        self._usb = data_show_system.get("usb", [])
+
+        try:
+            data_show_rc_system = await self.show_rc_system()
+            self._usb = data_show_rc_system.get("usb", self._usb)
+        except Exception as err:
+            _LOGGER.debug("%s could not read rc/system usb info: %s", self._mac, err)
 
         data_show_system_mode = await self.show_system_mode()
         self._hw_type = data_show_system_mode["active"]
@@ -173,6 +210,10 @@ class Router:
                 if (
                     (
                         data_interface.get('type', 'No') in LIST_INTERFACES
+                    )
+                    or
+                    (
+                        data_interface.get('type', 'No') in LIST_INTERFACES_PUBLIC
                         and data_interface.get('security-level', False) == 'public'
                     )
                     or data_interface.get('global', False)
@@ -363,8 +404,8 @@ class Router:
             _LOGGER.error(f"Error processing USB ports: {ex}", exc_info=True)
             return {}
 
-    async def api(self, method: str, endpoint: str, json: Mapping[str, Any] | None = {}):
-        resp = await self.auth()
+    async def api(self, method: str, endpoint: str, json: Mapping[str, Any] | None = None):
+        await self.auth()
         return await self.reguest_api(method, endpoint, json)
 
     async def auth(self):
@@ -423,6 +464,7 @@ class Router:
         interfaces = await self.api("get", "/rci/show/rc/interface")
         interface_wifi = {}
         for interface, interf in interfaces.items():
+            interface_main = interface.split('/')[0]
             if (
                 interf.get("authentication", False) 
                 and interf.get("authentication").get("wpa-psk", False)
@@ -431,19 +473,22 @@ class Router:
                 psw = interf["authentication"]["wpa-psk"]["psk"]
             else:
                 psw = None
-            if not interf.get('ssid', False):
-                nm_inerface = interface
+            if interf.get('ssid', False):
+                nm_inerface = (f"{INTERFACES_WIFI_NAME.get(interface_main, interface)}" % interf.get('ssid', "nameless"))
+            elif "WifiMaster" in interface:
+                nm_inerface = INTERFACES_WIFI_NAME_LIST.get(interface_main, interface)
             else:
-                nm_inerface = (f"{INTERFACES_WIFI_NAME.get(interface.split('/')[0], interface)}" % interf.get('ssid', "nameless"))
+                nm_inerface = interface
             interface_wifi[interface] = DataRcInterface(
                                                         interface,
                                                         nm_inerface,
-                                                        interface.split('/')[0],
+                                                        interface_main,
                                                         interf.get("ssid", False),
                                                         psw,
                                                         interf.get("up", False),
                                                         interf.get("rename", None),
                                                         interf.get("description", None),
+                                                        interf.get('idle-timeout', {}).get('idle-timeout', 600),
             )
         return interface_wifi
 
@@ -456,6 +501,9 @@ class Router:
     async def show_rc_interface_ip_global(self):
         return await self.api("get", f"/rci/show/rc/interface/ip/global")
 
+    async def show_rc_system(self):
+        return await self.api("get", "/rci/show/rc/system")
+
     async def ip_hotspot_host_list(self):
         return await self.api("get", "/rci/ip/hotspot/host")
 
@@ -467,7 +515,13 @@ class Router:
         return await self.api("post", "/rci/ip/hotspot/host", data_send)
 
     async def turn_on_off_interface(self, interface: str, state: str):
-        return await self.api("post", f"/rci/interface/{interface}", {state: "true"})
+        data_send = [
+            {"interface": {"name": interface, state: True}},
+        ]
+        if state == "up" and interface.startswith("WifiMaster") and "/" in interface:
+            data_send.append({"interface": {"name": interface.split("/")[0], state: True}})
+        data_send.append(CONFIG_SAVE)
+        return await self.api("post", "/rci/", data_send)
 
     async def turn_on_off_port_forwarding(self, port_forwarding: str, state: bool):
         data_send = [
@@ -479,7 +533,7 @@ class Router:
                     }
                 }
             },
-            {"system": {"configuration": {"save": {}}}}
+            CONFIG_SAVE
         ]
         return await self.api("post", f"/rci/", data_send)
 
@@ -490,6 +544,15 @@ class Router:
     async def turn_on_off_usb(self, state: bool, port: int):
         data_send = {"port": port, "power": {"shutdown": not state}}
         return await self.api("post", f"/rci/system/usb", data_send)
+
+    async def set_clients_idle_timeout_wifi(self, interface: str, timeout: int):
+        if not 60 <= timeout <= 2147483646:
+            raise ValueError(f"Value {timeout} must be in the range from 60 to 2147483646")
+        data_send = [
+            {"interface": {interface: {"idle-timeout": int(timeout)}}},
+            CONFIG_SAVE,
+        ]
+        return await self.api("post", "/rci/", data_send)
 
     def data_parser(self, data):
         new_data = {}
@@ -518,39 +581,52 @@ class Router:
         return stat_interface
 
     async def custom_request(self):
-        data_json_send=[]
-        data_json_send.append({"show": {"system": {}}},)
-        data_json_send.append({"show": {"interface": {}}})
-        data_json_send.append({"show": {"associations": {}}})
-        data_json_send.append({"show": {"rc": {"system": {}}}})
-        data_json_send.append({"show": {"rc": {"ip": {"http": {}}}}})
-        data_json_send.append({"show": {"media": {}}})
+        requests = [
+            ("system", {"show": {"system": {}}}),
+            ("interface", {"show": {"interface": {}}}),
+            ("associations", {"show": {"associations": {}}}),
+            ("rc_system", {"show": {"rc": {"system": {}}}}),
+            ("rc_ip_http", {"show": {"rc": {"ip": {"http": {}}}}}),
+        ]
 
         if self.hw_type == "router":
-            data_json_send.append({"show": {"ip": {"hotspot": {}}}})
-            data_json_send.append({"show": {"rc": {"interface": {"ip": {"global": {}}}}}})
-            data_json_send.append({"show": {"rc": {"ip": {"static": {}}}}})
-            data_json_send.append({"show": {"rc": {"ip": {"hotspot": {}}}}})
+            requests.extend(
+                [
+                    ("ip_hotspot", {"show": {"ip": {"hotspot": {}}}}),
+                    ("priority_interface", {"show": {"rc": {"interface": {"ip": {"global": {}}}}}}),
+                    ("rc_ip_static", {"show": {"rc": {"ip": {"static": {}}}}}),
+                    ("ip_hotspot_policy", {"show": {"rc": {"ip": {"hotspot": {}}}}}),
+                    ("pingcheck", {"show": {"ping-check": {}}}),
+                ]
+            )
 
-        full_info_other = await self.api("post", "/rci/", json=data_json_send)
+        if self.usb:
+            requests.append(("media", {"show": {"media": {}}}))
 
-        show_system = full_info_other[0]['show']['system']
+        responses = await self.api("post", "/rci/", json=[payload for _, payload in requests])
+        if not isinstance(responses, list):
+            raise ValueError(f"Unexpected custom_request response: {responses}")
+
+        response_map = dict(zip((name for name, _ in requests), responses, strict=False))
+
+        show_system = response_map.get("system", {}).get('show', {}).get('system', {})
         fw_branch = show_system.get('sandbox', 'stable')
-        show_interface = full_info_other[1]['show']['interface']
-        show_associations = full_info_other[2]['show']['associations']
-        show_rc_system_usb = full_info_other[3]['show']['rc']['system'].get('usb', [])
-        show_rc_ip_http = full_info_other[4]['show']['rc']['ip']['http']
-        show_media = full_info_other[5]['show'].get('media', {})
+        show_interface = response_map.get("interface", {}).get('show', {}).get('interface', {})
+        show_associations = response_map.get("associations", {}).get('show', {}).get('associations', {})
+        show_rc_system_usb = response_map.get("rc_system", {}).get('show', {}).get('rc', {}).get('system', {}).get('usb', [])
+        show_rc_ip_http = response_map.get("rc_ip_http", {}).get('show', {}).get('rc', {}).get('ip', {}).get('http', {})
+        show_media = response_map.get("media", {}).get('show', {}).get('media', {})
 
         show_ip_hotspot = {}
         show_rc_ip_static = {}
         show_ip_hotspot_policy = {}
         priority_interface = {}
+        show_pingcheck = {}
 
         self._fw_branch = fw_branch
 
         if self.hw_type == "router":
-            data_show_ip_hotspot = full_info_other[6]['show']['ip']['hotspot']['host']
+            data_show_ip_hotspot = response_map.get("ip_hotspot", {}).get('show', {}).get('ip', {}).get('hotspot', {}).get('host', [])
             for hotspot in data_show_ip_hotspot:
                 show_ip_hotspot[hotspot["mac"]] = DataDevice(
                     hotspot.get('mac'), 
@@ -565,9 +641,9 @@ class Router:
                     hotspot.get('txbytes'), 
                 )
             
-            priority_interface = full_info_other[7]['show']['rc']['interface']['ip']['global']
+            priority_interface = response_map.get("priority_interface", {}).get('show', {}).get('rc', {}).get('interface', {}).get('ip', {}).get('global', {})
 
-            data_show_rc_ip_static = full_info_other[8]['show']['rc']['ip']['static']
+            data_show_rc_ip_static = response_map.get("rc_ip_static", {}).get('show', {}).get('rc', {}).get('ip', {}).get('static', [])
             for port_frw in data_show_rc_ip_static:
                 nm_pfrw = port_frw.get('comment', port_frw.get('index'))
                 nm_pfrw = nm_pfrw if nm_pfrw != "" else port_frw.get('index')
@@ -583,9 +659,20 @@ class Router:
                     port_frw.get('disable', False), 
                 )
 
-            data_show_ip_hotspot_policy = full_info_other[9]['show']['rc']['ip']['hotspot']['host']
+            data_show_ip_hotspot_policy = response_map.get("ip_hotspot_policy", {}).get('show', {}).get('rc', {}).get('ip', {}).get('hotspot', {}).get('host', [])
             for hotspot_pl in data_show_ip_hotspot_policy:
                 show_ip_hotspot_policy[hotspot_pl["mac"]] = hotspot_pl
+
+            data_show_pingcheck = response_map.get("pingcheck", {}).get('show', {}).get('ping-check', {}).get('pingcheck', [])
+            for pingcheck in data_show_pingcheck:
+                interfaces = pingcheck.get('interface')
+                if not isinstance(interfaces, dict):
+                    continue
+                for interface, interface_data in interfaces.items():
+                    show_pingcheck[interface] = DataPingCheck(
+                        self.request_interface.get(interface, interface),
+                        interface_data.get('status', 'not ready'),
+                    )
 
         stat_interface = await self.show_stat_interface()
 
@@ -601,4 +688,5 @@ class Router:
             show_rc_system_usb,
             show_media,
             stat_interface,
+            show_pingcheck,
             )

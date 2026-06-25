@@ -100,10 +100,18 @@ class KeeneticRouterFirmwareCoordinator(DataUpdateCoordinator):
         )
 
     async def _async_update_data(self):
+        data_components_list = {}
         repeat=0
         while repeat < COUNT_REPEATED_REQUEST_FIREWARE:
             repeat += 1
             data_components_list = await self.router.components_list()
+            if not isinstance(data_components_list, dict):
+                _LOGGER.debug(
+                    "%s components_list returned non-json response: %s",
+                    self.router.mac,
+                    data_components_list,
+                )
+                return self._version_firmware
             if not data_components_list.get('continued', False):
                 break
             _LOGGER.debug(f"{self.router.mac} data_components_list not data {data_components_list}")
@@ -187,7 +195,7 @@ class KeeneticRouterRcInterfaceCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=f"{DOMAIN}-{self._host}-rc-interface",
-            update_interval=timedelta(minutes=update_interval),
+            update_interval=timedelta(seconds=update_interval),
         )
 
     async def _async_update_data(self):

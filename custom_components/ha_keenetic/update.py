@@ -70,14 +70,26 @@ class KeeneticUpdateEntity(CoordinatorEntity[KeeneticRouterFirmwareCoordinator],
         return self.coordinator.data.get('channel')
 
     @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        return (
+            super().available
+            and isinstance(self.coordinator.data, dict)
+            and isinstance(self.coordinator.data.get("current"), dict)
+            and isinstance(self.coordinator.data.get("new"), dict)
+        )
+
+    @property
     def installed_version(self) -> str | None:
         """Version currently in use."""
-        return self.coordinator.data.get("current").get("title")
+        current = self.coordinator.data.get("current")
+        return current.get("title") if isinstance(current, dict) else None
 
     @property
     def latest_version(self) -> str | None:
         """Latest version available for install."""
-        return self.coordinator.data.get("new").get("title")
+        new = self.coordinator.data.get("new")
+        return new.get("title") if isinstance(new, dict) else None
 
     @property
     def in_progress(self) -> bool:

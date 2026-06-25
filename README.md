@@ -1,83 +1,70 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/v/release/akinin/ha_keenetic?style=flat&color=%23A349A4)](https://github.com/akinin/ha_keenetic)
+
 # Keenetic Router Integration for Home Assistant
+
 [Russian ver.](README_RU.md)
 
-This is a Home Assistant custom integration for Keenetic Routers. It provides detailed information about your Keenetic router including WiFi networks, ethernet ports, and mesh network status.
+Home Assistant custom integration for Keenetic routers. It talks to the local Keenetic REST API and exposes router status, clients, interfaces, Wi-Fi, mesh nodes, USB/media state, firmware updates, and basic controls.
 
 ## Features
 
-- Monitor router system information (CPU, memory, uptime)
-- Control WiFi networks (enable/disable)
-- View ethernet port status and statistics
-- Monitor mesh network nodes
-- View detailed interface statistics
+- Router diagnostics: CPU load, memory usage, uptime, hostname, domain name, WAN IP.
+- Interface monitoring: WAN/VPN connectivity, traffic statistics, Ethernet ports, Wi-Fi interfaces.
+- Wi-Fi control: enable/disable Wi-Fi interfaces and configure client idle timeout.
+- Client management: device trackers and client policy selectors for selected or all known clients.
+- Port forwarding controls: optional switches for configured forwarding rules.
+- Mesh monitoring: mesh node status and diagnostic attributes.
+- USB/media monitoring: USB power switches and media connectivity sensors when supported by the router.
+- Firmware update entity with optional backup before install.
+- Services for direct Keenetic API calls and router backup.
 
 ## Installation
 
-### HACS (Recommended)
+### HACS
 
-1. Open HACS
-2. Click on "Integrations"
-3. Click the "+" button
-4. Search for "Keenetic Router"
-5. Click "Install"
-6. Restart Home Assistant
+1. Open HACS.
+2. Go to "Integrations".
+3. Search for "Keenetic Router".
+4. Install the integration.
+5. Restart Home Assistant.
 
 ### Manual Installation
 
-1. Download the latest release
-2. Copy the `ha_keenetic` folder to your `custom_components` directory
-3. Restart Home Assistant
+1. Download the latest release archive.
+2. Copy the `ha_keenetic` folder to `custom_components`.
+3. Restart Home Assistant.
 
-### Important Points
+## Keenetic REST API Access
 
-The integration communicates with the router via REST API, for which you need to configure port forwarding:
+The integration uses Keenetic's local REST API. If Home Assistant cannot access the router API directly, create a port forwarding rule on the router:
 
-1. Access your router's web interface
-2. Go to "Port Forwarding" > "Add rule"
-3. Configure the following parameters:
-   - Enable rule: ✓ (enabled)
-   - Description: rest api
-   - Input: Other destination
-   - IP address: 192.168.1.0 (local network address where HomeAssistant is located)
-   - Subnet mask: 255.255.255.0 (/24)
-   - Output: This Keenetic device
-   - Protocol: TCP
-   - Rule type: Single port
-   - Open the port: 81
-   - Redirect to port: 79
-   - Work schedule: Always on
+- Input: your Home Assistant network or Home Assistant IP address.
+- Output: this Keenetic device.
+- Protocol: TCP.
+- Open port: `81`.
+- Redirect to port: `79`.
 
 ![Rest API](images/0.png)
 
-⚠️ Security Recommendation:
-For enhanced security, it is recommended to configure Firewall rules to allow REST API access only from your Home Assistant IP address. This helps protect the router from unauthorized access within the local network.
+For better security, allow REST API access only from the Home Assistant IP address.
 
-To enable automatic router discovery, you need to enable UPnP on your Keenetic:
-
-1. Access your router's web interface
-2. Go to "System Settings" > "Component options"
-3. Make sure "UPnP" is enabled:
+For automatic discovery, enable UPnP in the Keenetic web interface:
 
 ![UPnP setting](images/0-1.png)
 
-## Automatic Setup
+## Setup
 
-If UPnP is enabled, the integration will discover the router.
+If UPnP is enabled, Home Assistant can discover the router automatically.
 
 ![Discovered integration](images/1.png)
 
-## Manual Setup
+For manual setup:
 
-1. Go to "Settings" > "Devices & services"
-2. Click the "+ ADD INTEGRATION" button
-3. Search for "Keenetic Router"
-4. Enter your router details:
-   - IP address (default: 192.168.1.1)
-   - Port (default: 81)
-   - Username (default: admin)
-   - Password
+1. Go to "Settings" > "Devices & services".
+2. Click "+ ADD INTEGRATION".
+3. Search for "Keenetic Router".
+4. Enter router address, port, username, password, and SSL option.
 
 ![Integration search](images/1-1.png)
 
@@ -85,25 +72,62 @@ If UPnP is enabled, the integration will discover the router.
 
 ![Successful connection](images/3.png)
 
-## Supported Devices
+## Options
 
-The integration has been tested with the following models:
-- Keenetic Giga
-- Keenetic Hero 4g
-- Keenetic Sprinter SE
+After setup, open integration options to configure:
 
-Other Keenetic models should also work.
+- Polling interval.
+- QR code image entities for selected Wi-Fi networks.
+- Client policy selectors for selected clients or all clients.
+- Device trackers for selected clients or all clients.
+- Port forwarding switches.
+- Backup file types for firmware update backup.
 
-## Available Entities
+## Entities
 
 ### Sensors
-- System information (CPU, memory, uptime)
-- WiFi networks status
-- Ethernet ports status
-- Mesh network nodes status
+
+- CPU load, memory usage, uptime.
+- Hostname and domain name.
+- WAN IP address.
+- Wi-Fi client count.
+- Mesh node status.
+- Ethernet, Wi-Fi, USB, and VPN diagnostic sensors when available.
+
+### Binary Sensors
+
+- Router connection status.
+- WAN/VPN interface connectivity.
+- Ping Check status per monitored interface.
+- USB/media connection status.
 
 ### Switches
-- WiFi networks (enable/disable)
+
+- Wi-Fi interfaces.
+- WAN/VPN and other controllable interfaces.
+- Port forwarding rules.
+- Web configurator public access.
+- USB port power.
+
+### Numbers
+
+- Wi-Fi client idle timeout for supported Wi-Fi interfaces.
+
+### Selects
+
+- Internet access policy for selected clients.
+
+### Device Trackers
+
+- Optional trackers for selected or all known clients.
+
+### Update
+
+- Firmware update entity with optional configuration and firmware backup.
+
+### Images
+
+- Optional Wi-Fi QR code image entities.
 
 ![Sensors](images/4.png)
 
@@ -115,14 +139,34 @@ Other Keenetic models should also work.
 
 ![WAN information](images/8.png)
 
-Mesh devices information (if available):
+Mesh devices information, if available:
 
 ![Mesh information](images/9.png)
 
+## Services
+
+### `ha_keenetic.request_api`
+
+Runs a direct request against the Keenetic API. Useful for diagnostics and advanced automations.
+
+### `ha_keenetic.backup_router`
+
+Downloads router configuration and/or firmware backup files.
+
+## Supported Devices
+
+Tested with:
+
+- Keenetic Giga
+- Keenetic Hero 4G
+- Keenetic Sprinter SE
+
+Other Keenetic models and modes should work if the required API endpoints are available.
+
 ## Contributing
 
-Any suggestions for improvement are welcome.
+Issues, logs, and pull requests are welcome.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
