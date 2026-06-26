@@ -1,5 +1,6 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/v/release/akinin/ha_keenetic?style=flat&color=%23A349A4)](https://github.com/akinin/ha_keenetic)
+[![Поддержать проект](https://img.shields.io/badge/Поддержать%20проект-spasibomir.ru-2ea44f?style=flat)](https://spasibomir.ru/pay/22699)
 
 # Интеграция Keenetic Router для Home Assistant
 
