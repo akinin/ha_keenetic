@@ -1,18 +1,12 @@
-# v2.1.1
+# v2.1.2
 
 Bugfix release for the Keenetic Router integration.
 
 ## Fixed
 
-- Restored compatibility of the sensor platform by avoiding newer Home Assistant constants for Wi-Fi temperature units.
-- Removed the strict data-rate device class from the Wi-Fi bitrate diagnostic sensor to avoid unit validation issues on different Home Assistant versions.
-
-## Added
-
-- Added a Connection section to integration options.
-- Router host, port, username, password, and SSL mode can now be edited after setup.
-- New connection settings are validated before they are saved.
+- Fixed sensor platform setup when Keenetic returns USB/media partitions as a dictionary instead of a list.
+- Restored router diagnostic sensors that could become unavailable after the media diagnostics update.
 
 ## Notes
 
-After changing connection settings, save the options flow so Home Assistant reloads the integration with the new router data.
+This release supersedes `v2.1.1`. If diagnostics such as CPU load, memory, uptime, hostname, domain name, WAN IP, or Wi-Fi clients are unavailable, update to this version and restart Home Assistant.

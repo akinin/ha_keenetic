@@ -251,8 +251,22 @@ STORAGE_SENSOR_TYPES: tuple[KeeneticStorageSensorEntityDescription, ...] = (
 def iter_storage_partitions(show_media: dict[str, Any]) -> list[tuple[str, str, dict[str, Any]]]:
     """Return flattened media partition rows."""
     partitions = []
+    if not isinstance(show_media, dict):
+        return partitions
+
     for media_id, media_data in show_media.items():
-        for partition in media_data.get("partition", []):
+        if not isinstance(media_data, dict):
+            continue
+
+        raw_partitions = media_data.get("partition", [])
+        if isinstance(raw_partitions, dict):
+            raw_partitions = raw_partitions.values()
+        elif not isinstance(raw_partitions, list):
+            raw_partitions = [raw_partitions]
+
+        for partition in raw_partitions:
+            if not isinstance(partition, dict):
+                continue
             partition_id = partition.get("id") or partition.get("label") or media_id
             partitions.append((media_id, partition_id, partition))
     return partitions
