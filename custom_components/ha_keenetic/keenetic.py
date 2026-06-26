@@ -11,6 +11,13 @@ import aiofiles.os
 from pathlib import Path
 from dataclasses import dataclass
 
+from .processor_ethernet import EthernetProcessor
+from .processor_mesh import MeshProcessor
+from .processor_modem import ModemProcessor
+from .processor_usb import UsbProcessor
+from .processor_vpn import VpnProcessor
+from .processor_wifi import WiFiProcessor
+
 _LOGGER = logging.getLogger(__name__)
 
 @dataclass
@@ -237,8 +244,6 @@ class Router:
                     _LOGGER.error(f"Error getting statistics for port {port_id}: {ex}")
                     return {}
             
-            # Импортируем процессор Ethernet портов и обрабатываем данные
-            from .processor_ethernet import EthernetProcessor
             return await EthernetProcessor.process_ethernet_ports(interfaces, get_port_statistics)
         except Exception as ex:
             _LOGGER.error(f"Error processing ethernet ports: {ex}")
@@ -253,8 +258,6 @@ class Router:
             # Логируем для отладки
             _LOGGER.debug("Mesh network information from /rci/show/mws/member: %s", mesh_info)
             
-            # Импортируем процессор Mesh-сети и обрабатываем данные
-            from .processor_mesh import MeshProcessor
             return MeshProcessor.process_mesh_nodes(mesh_info)
         except Exception as ex:
             _LOGGER.error(f"Error processing mesh nodes: {ex}")
@@ -283,8 +286,6 @@ class Router:
                     _LOGGER.error(f"Error getting statistics for interface {interface_id}: {ex}")
                     return {}
             
-            # Импортируем процессор VPN интерфейсов и обрабатываем данные
-            from .processor_vpn import VpnProcessor
             vpn_interfaces = await VpnProcessor.process_vpn_interfaces(interfaces, get_interface_statistics)
             
             # Логируем результат
@@ -293,6 +294,23 @@ class Router:
             return vpn_interfaces
         except Exception as ex:
             _LOGGER.error(f"Error processing VPN interfaces: {ex}")
+            return {}
+
+    async def get_modem_interfaces(self):
+        """Get information about mobile modem interfaces."""
+        try:
+            interfaces = await self.show_interface()
+
+            async def get_interface_statistics(interface_id):
+                try:
+                    return await self.show_interface_stat(interface_id)
+                except Exception as ex:
+                    _LOGGER.error(f"Error getting statistics for modem interface {interface_id}: {ex}")
+                    return {}
+
+            return await ModemProcessor.process_modem_interfaces(interfaces, get_interface_statistics)
+        except Exception as ex:
+            _LOGGER.error(f"Error processing modem interfaces: {ex}")
             return {}
 
     async def async_download_file(self, download_url, folder):
@@ -345,8 +363,6 @@ class Router:
                     _LOGGER.error(f"Error getting associations: {ex}")
                     return {}
             
-            # Импортируем процессор WiFi интерфейсов и обрабатываем данные
-            from .processor_wifi import WiFiProcessor
             return await WiFiProcessor.process_wifi_interfaces(interfaces, rc_interfaces, get_associations)
         except Exception as ex:
             _LOGGER.error(f"Error processing WiFi interfaces: {ex}")
@@ -397,8 +413,6 @@ class Router:
                     _LOGGER.error(f"Error getting media info for {media_name}: {ex}")
                     return None
             
-            # Импортируем процессор USB портов и обрабатываем данные
-            from .processor_usb import UsbProcessor
             return await UsbProcessor.process_usb_ports(usb_info, get_media_info)
         except Exception as ex:
             _LOGGER.error(f"Error processing USB ports: {ex}", exc_info=True)

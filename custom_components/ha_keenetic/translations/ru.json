@@ -1,7 +1,9 @@
 {
   "config": {
     "abort": {
-      "already_configured": "Устройство уже настроено!"
+      "already_configured": "Устройство уже настроено!",
+      "no_host": "При обнаружении не получен адрес роутера",
+      "not_keenetic": "Обнаруженное устройство не является роутером Keenetic"
     },
     "step": {
       "user": {
@@ -47,35 +49,49 @@
   "services": {
     "request_api": {
       "name": "Выполнить запрос.",
+      "description": "Выполнить прямой запрос к Keenetic API.",
       "fields": {
         "device_id": {
-          "name": "Устройство:"
+          "name": "Устройство:",
+          "description": "Устройство Keenetic."
         },
         "entry_id": {
-          "name": "Интеграция:"
+          "name": "Интеграция:",
+          "description": "Экземпляр интеграции Keenetic."
         },
         "method": {
-          "name": "Метод:"
+          "name": "Метод:",
+          "description": "HTTP-метод запроса."
         },
         "endpoint": {
-          "name": "Точка API:"
+          "name": "Точка API:",
+          "description": "Эндпоинт Keenetic API."
         },
         "data_json": {
-          "name": "Данные:"
+          "name": "Данные:",
+          "description": "JSON-данные для запроса."
         }
       }
     },
     "backup_router": {
       "name": "Создать резервную копию.",
+      "description": "Скачать резервную копию конфигурации и/или прошивки роутера.",
       "fields": {
+        "device_id": {
+          "name": "Устройство:",
+          "description": "Устройство Keenetic."
+        },
         "entry_id": {
-          "name": "Интеграция:"
+          "name": "Интеграция:",
+          "description": "Экземпляр интеграции Keenetic."
         },
         "folder": {
-          "name": "Папка для сохранения:"
+          "name": "Папка для сохранения:",
+          "description": "Папка, в которую будут сохранены файлы резервной копии."
         },
         "type": {
-          "name": "Тип резервной копии:"
+          "name": "Тип резервной копии:",
+          "description": "Типы файлов резервной копии для скачивания."
         }
       }
     }
@@ -150,6 +166,9 @@
         "name": "{name_interface}"
       },
       "interface": {
+        "name": "{name_interface}"
+      },
+      "modem_interface": {
         "name": "{name_interface}"
       },
       "port_forwarding": {

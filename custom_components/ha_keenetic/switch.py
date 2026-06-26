@@ -1,5 +1,6 @@
 """The Keenetic API binary switch entities."""
 
+import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 import logging
@@ -54,16 +55,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
         # Собираем все данные в одном запросе, если возможно
         try:
             # Получаем все данные параллельно для ускорения загрузки
-            import asyncio
-            
             tasks = [
                 coordinator.router.get_ethernet_ports(),
                 coordinator.router.get_usb_ports(),
                 coordinator.router.get_wifi_interfaces(),
-                coordinator.router.get_vpn_interfaces()
+                coordinator.router.get_vpn_interfaces(),
+                coordinator.router.get_modem_interfaces(),
             ]
             
-            ethernet_ports, usb_ports, wifi_interfaces, vpn_interfaces = await asyncio.gather(*tasks)
+            ethernet_ports, usb_ports, wifi_interfaces, vpn_interfaces, modem_interfaces = await asyncio.gather(*tasks)
             
             # Создаем сущности для Ethernet портов
             for port_id, port_data in ethernet_ports.items():
@@ -98,6 +98,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_e
             for interface_id, interface_data in vpn_interfaces.items():
                 switches.append(
                     KeeneticVpnSwitchEntity(
+                        coordinator,
+                        interface_data,
+                    )
+                )
+
+            for interface_id, interface_data in modem_interfaces.items():
+                switches.append(
+                    KeeneticModemSwitchEntity(
                         coordinator,
                         interface_data,
                     )
@@ -274,6 +282,58 @@ class KeeneticVpnSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], Swit
         if "attributes" in self._interface_data:
             attributes.update(self._interface_data["attributes"])
         
+        return attributes
+
+class KeeneticModemSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], SwitchEntity):
+    """Keenetic mobile modem switch entity."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        coordinator: KeeneticRouterCoordinator,
+        interface_data,
+    ) -> None:
+        """Initialize the Keenetic modem switch."""
+        super().__init__(coordinator)
+        self._interface_data = interface_data
+        self._id = interface_data["id"]
+        self._label = interface_data["label"]
+
+        self._attr_name = self._label
+        self._attr_translation_key = "modem_interface"
+        self._attr_unique_id = f"{coordinator.unique_id}_modem_{self._id}"
+        self._attr_device_info = coordinator.device_info
+        self._attr_translation_placeholders = {"name_interface": self._attr_name}
+
+    @property
+    def is_on(self) -> bool:
+        """Return state."""
+        try:
+            interface_data = self.coordinator.data.show_interface.get(self._id, {})
+            return interface_data.get("state", "down") == "up"
+        except Exception as ex:
+            _LOGGER.error(f"Error getting modem interface state: {ex}")
+            return False
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn on the modem interface."""
+        await self.coordinator.router.turn_on_off_interface(self._id, "up")
+        await self.coordinator.async_request_refresh()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off the modem interface."""
+        await self.coordinator.router.turn_on_off_interface(self._id, "down")
+        await self.coordinator.async_request_refresh()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the state attributes."""
+        attributes = {
+            "interface_id": self._id,
+            "interface_type": "modem",
+        }
+        attributes.update(self._interface_data.get("attributes", {}))
         return attributes
 
 class KeeneticUsbPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinator], SwitchEntity):

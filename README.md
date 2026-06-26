@@ -35,19 +35,9 @@ Home Assistant custom integration for Keenetic routers. It talks to the local Ke
 2. Copy the `ha_keenetic` folder to `custom_components`.
 3. Restart Home Assistant.
 
-## Keenetic REST API Access
+## Keenetic Access
 
-The integration uses Keenetic's local REST API. If Home Assistant cannot access the router API directly, create a port forwarding rule on the router:
-
-- Input: your Home Assistant network or Home Assistant IP address.
-- Output: this Keenetic device.
-- Protocol: TCP.
-- Open port: `81`.
-- Redirect to port: `79`.
-
-![Rest API](images/0.png)
-
-For better security, allow REST API access only from the Home Assistant IP address.
+The integration connects to the router web API over HTTP or HTTPS using the host, port, username, and password configured in Home Assistant. Use a local router address whenever possible and avoid exposing the router interface outside your trusted network.
 
 For automatic discovery, enable UPnP in the Keenetic web interface:
 

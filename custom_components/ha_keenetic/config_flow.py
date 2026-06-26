@@ -4,6 +4,7 @@ import logging
 import voluptuous as vol
 from typing import Any
 import operator
+from urllib.parse import urlparse
 
 from homeassistant import config_entries
 from homeassistant.core import callback
@@ -11,6 +12,7 @@ import homeassistant.helpers.config_validation as cv
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import format_mac
+from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 from homeassistant.const import (
     CONF_HOST,
     CONF_PASSWORD,
@@ -57,6 +59,39 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Keenetic."""
+
+    async def async_step_ssdp(self, discovery_info: SsdpServiceInfo) -> FlowResult:
+        """Handle SSDP discovery."""
+        manufacturer = (discovery_info.upnp.get("manufacturer") or "").lower()
+        if "keenetic" not in manufacturer and "zyxel" not in manufacturer:
+            return self.async_abort(reason="not_keenetic")
+
+        hostname = urlparse(discovery_info.ssdp_location).hostname
+        if hostname is None:
+            return self.async_abort(reason="no_host")
+
+        serial = discovery_info.upnp.get("serialNumber")
+        udn = discovery_info.upnp.get("UDN")
+        await self.async_set_unique_id(serial or udn or hostname)
+        self._abort_if_unique_id_configured(updates={CONF_HOST: f"http://{hostname}"})
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_USERNAME, default="admin"): cv.string,
+                    vol.Required(CONF_PASSWORD, default=""): cv.string,
+                    vol.Required(CONF_HOST, default=f"http://{hostname}"): str,
+                    vol.Required(CONF_PORT, default=80): int,
+                    vol.Required(CONF_SSL, default=False): bool,
+                }
+            ),
+            description_placeholders={
+                "name": discovery_info.upnp.get("friendlyName", "Keenetic Router"),
+                "host": hostname,
+            },
+        )
 
     async def async_step_user(self, user_input=None):
         """Handle the initial step."""

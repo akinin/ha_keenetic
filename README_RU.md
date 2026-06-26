@@ -35,19 +35,9 @@
 2. Скопируйте папку `ha_keenetic` в `custom_components`.
 3. Перезагрузите Home Assistant.
 
-## Доступ к REST API Keenetic
+## Доступ к Keenetic
 
-Интеграция использует локальный REST API Keenetic. Если Home Assistant не может обратиться к API роутера напрямую, создайте на роутере правило проброса порта:
-
-- Input: сеть Home Assistant или IP-адрес Home Assistant.
-- Output: This Keenetic device.
-- Protocol: TCP.
-- Open port: `81`.
-- Redirect to port: `79`.
-
-![Rest API](images/0.png)
-
-Для безопасности лучше разрешить доступ к REST API только с IP-адреса Home Assistant.
+Интеграция подключается к web API роутера по HTTP или HTTPS, используя адрес, порт, логин и пароль, указанные в Home Assistant. По возможности используйте локальный адрес роутера и не открывайте веб-интерфейс за пределы доверенной сети.
 
 Для автоматического обнаружения роутера включите UPnP в веб-интерфейсе Keenetic:
 

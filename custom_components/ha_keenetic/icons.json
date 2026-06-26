@@ -22,6 +22,13 @@
                     "on": "mdi:ethernet"
                 }
             },
+            "modem_interface": {
+                "default": "mdi:access-point-network",
+                "state": {
+                    "off": "mdi:access-point-network-off",
+                    "on": "mdi:access-point-network"
+                }
+            },
             "port_forwarding": {
                 "default": "mdi:swap-horizontal-bold",
                 "state": {

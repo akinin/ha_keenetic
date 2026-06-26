@@ -11,7 +11,15 @@
   "requirements": ["pyqrcode==1.2.1", "pypng==0.20220715.0"],
   "ssdp": [
       {
+        "st": "upnp:rootdevice",
+        "manufacturer": "Keenetic Ltd."
+      },
+      {
         "st": "urn:schemas-upnp-org:device:InternetGatewayDevice:1",
+        "manufacturer": "Keenetic Ltd."
+      },
+      {
+        "st": "urn:schemas-upnp-org:device:InternetGatewayDevice:2",
         "manufacturer": "Keenetic Ltd."
       },
       {

@@ -35,6 +35,7 @@ from .const import (
     DOMAIN,
     COORD_FULL,
 )
+from .icons import ICON_MESH_NODE, ICON_MESH_NODE_OFFLINE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -198,10 +199,6 @@ class KeeneticMeshNodeSensor(CoordinatorEntity[KeeneticRouterCoordinator], Senso
     @property
     def icon(self) -> str:
         """Return the icon of the sensor."""
-        ICON_MESH_NODE = "mdi:access-point"
-        ICON_MESH_NODE_OFFLINE = "mdi:access-point-off"
-        
-        # Используем данные, которые уже есть в _node_data
         return ICON_MESH_NODE if self._node_data.get("status") == "connected" else ICON_MESH_NODE_OFFLINE
     
     @property

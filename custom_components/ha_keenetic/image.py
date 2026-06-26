@@ -1,16 +1,18 @@
 """The Keenetic API image entities."""
 
 from __future__ import annotations
-from typing import Any
-import logging
 import io
+import logging
+from typing import Any
+
 import pyqrcode
 
 from homeassistant.components.image import ImageEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 import homeassistant.util.dt as dt_util
@@ -30,10 +32,10 @@ async def async_setup_entry(
     entry: ConfigEntry, 
     async_add_entities: AddEntitiesCallback
 ) -> None:
+    """Set up Keenetic QR code image entities."""
     if COORD_RC_INTERFACE not in hass.data[DOMAIN][entry.entry_id]:
         _LOGGER.debug("RC Interface coordinator not available for this device, skipping image setup")
         return
-    """Set up Keenetic QR code image entities."""
     coordinator: KeeneticRouterRcInterfaceCoordinator = hass.data[DOMAIN][entry.entry_id][COORD_RC_INTERFACE]
     if coordinator is None:
         _LOGGER.debug("RC Interface coordinator is None, skipping image setup")
@@ -43,13 +45,12 @@ async def async_setup_entry(
     @callback
     def async_update_images() -> None:
         qr_images: list[KeeneticQrWiFiImageEntity] = []
-        selected_networks = entry.options.get(CONF_SELECT_WIFI_QR, [])
+        selected_networks = set(entry.options.get(CONF_SELECT_WIFI_QR, []))
         create_all = entry.options.get(CONF_CREATE_IMAGE_QR, False)
     
         entity_registry = async_get_entity_registry(hass)
     
         for interface_id, interface_data in coordinator.data.items():
-            # Проверяем, что это WiFi интерфейс с SSID
             is_wifi = (
                 hasattr(interface_data, 'ssid') and 
                 interface_data.ssid and 
@@ -60,7 +61,6 @@ async def async_setup_entry(
             if not is_wifi:
                 continue
     
-            # Если интерфейс выбран или выбраны все, и он еще не отслеживается
             if (interface_id in selected_networks or create_all):
                 if interface_id not in tracked:
                     _LOGGER.debug(f"Creating QR code for WiFi: {interface_id} ({interface_data.name_interface})")
@@ -77,13 +77,20 @@ async def async_setup_entry(
                 entity_registry.async_remove(entity.entity_id)
                 hass.async_create_task(entity.async_remove(force_remove=True))
     
-        # Удаляем все объекты, которые больше не отслеживаются
         for interface_id in list(tracked):
             if interface_id not in coordinator.data or interface_id not in selected_networks and not create_all:
                 _LOGGER.debug(f"Cleaning up untracked QR code for WiFi: {interface_id}")
                 entity = tracked.pop(interface_id)
                 entity_registry.async_remove(entity.entity_id)
                 hass.async_create_task(entity.async_remove(force_remove=True))
+
+        for entity in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
+            if entity.domain != "image" or entity.translation_key != "qrwifi":
+                continue
+            interface_id = (entity.unique_id or "").rsplit("_qrwifi_", 1)[-1]
+            if interface_id and not create_all and interface_id not in selected_networks:
+                _LOGGER.debug("Removing unselected QR entity from registry: %s", entity.entity_id)
+                entity_registry.async_remove(entity.entity_id)
     
         async_add_entities(qr_images)
 
@@ -119,7 +126,6 @@ class KeeneticQrWiFiImageEntity(CoordinatorEntity[KeeneticRouterRcInterfaceCoord
             
         interface_data = self.coordinator.data[self._interface_id]
         
-        # Проверяем, что это WiFi интерфейс с SSID
         if not hasattr(interface_data, 'ssid') or not interface_data.ssid:
             _LOGGER.warning(f"Interface {self._interface_id} has no SSID")
             return None
@@ -158,7 +164,7 @@ class KeeneticQrWiFiImageEntity(CoordinatorEntity[KeeneticRouterRcInterfaceCoord
             return {}
             
         interface_data = self.coordinator.data[self._interface_id]
-        attrs = {}
+        attrs: dict[str, Any] = {}
         
         if hasattr(interface_data, 'id'):
             attrs["interface"] = interface_data.id
