@@ -11,11 +11,12 @@ Home Assistant custom integration for Keenetic routers. It talks to the local Ke
 
 - Router diagnostics: CPU load, memory usage, uptime, hostname, domain name, WAN IP.
 - Interface monitoring: WAN/VPN connectivity, traffic statistics, Ethernet ports, Wi-Fi interfaces.
+- Wi-Fi radio diagnostics: channel, channel width, bitrate, and temperature when available.
 - Wi-Fi control: enable/disable Wi-Fi interfaces and configure client idle timeout.
 - Client management: device trackers and client policy selectors for selected or all known clients.
 - Port forwarding controls: optional switches for configured forwarding rules.
 - Mesh monitoring: mesh node status and diagnostic attributes.
-- USB/media monitoring: USB power switches and media connectivity sensors when supported by the router.
+- USB/media monitoring: USB power switches, media connectivity, and storage usage sensors when supported by the router.
 - Firmware update entity with optional backup before install.
 - Services for direct Keenetic API calls and router backup.
 
@@ -66,14 +67,14 @@ For manual setup:
 
 ## Options
 
-After setup, open integration options to configure:
+After setup, open integration options. The options are split into sections:
 
-- Polling interval.
-- QR code image entities for selected Wi-Fi networks.
-- Client policy selectors for selected clients or all clients.
-- Device trackers for selected clients or all clients.
-- Port forwarding switches.
-- Backup file types for firmware update backup.
+- General: polling interval and current router diagnostics.
+- Wi-Fi: QR code image entities for all or selected Wi-Fi networks.
+- Clients: client policy selectors and device trackers for selected clients or all clients.
+- Features and backups: port forwarding switches and backup file types.
+
+Open each section you need, adjust the values, then choose "Save" in the options menu.
 
 ## Entities
 
@@ -84,7 +85,7 @@ After setup, open integration options to configure:
 - WAN IP address.
 - Wi-Fi client count.
 - Mesh node status.
-- Ethernet, Wi-Fi, USB, and VPN diagnostic sensors when available.
+- Ethernet, Wi-Fi, USB/storage, and VPN diagnostic sensors when available.
 
 ### Binary Sensors
 

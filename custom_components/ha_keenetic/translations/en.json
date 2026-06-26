@@ -28,6 +28,44 @@
       "integration_not_setup": "Integration is not set up"
     },
     "step": {
+      "init": {
+        "menu_options": {
+          "configure_general": "General",
+          "configure_wifi": "Wi-Fi",
+          "configure_clients": "Clients",
+          "configure_features": "Features and backups",
+          "save": "Save"
+        }
+      },
+      "configure_general": {
+        "description": "Router: {model}\nHost: {host}\nMode: {mode}\nClients: {clients}\nUptime: {uptime} seconds",
+        "data": {
+          "scan_interval": "Scan interval (seconds)"
+        }
+      },
+      "configure_wifi": {
+        "description": "Choose Wi-Fi QR code entities. The QR code contains the Wi-Fi password, so avoid using the same password for Wi-Fi and router administration.",
+        "data": {
+          "create_image_qr": "Create QR codes for all Wi-Fi networks",
+          "select_wifi_qr": "Create QR codes for selected Wi-Fi networks"
+        }
+      },
+      "configure_clients": {
+        "description": "Choose which client entities should be created.",
+        "data": {
+          "create_entity_all_clients_button_policy": "Create policy selectors for all clients",
+          "clients_select_policy": "Create policy selectors for selected clients",
+          "create_device_tracker": "Create device trackers for all clients",
+          "create_select_device_tracker": "Create device trackers for selected clients"
+        }
+      },
+      "configure_features": {
+        "description": "Optional router features.",
+        "data": {
+          "create_entity_port_forwarding": "Create switches for port forwarding rules",
+          "backup_type_file": "Backup file types"
+        }
+      },
       "configure_router": {
         "description": "Additional router options.",
         "data": {

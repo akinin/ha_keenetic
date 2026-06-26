@@ -10,7 +10,6 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 import homeassistant.helpers.config_validation as cv
 from homeassistant.data_entry_flow import FlowResult
-from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.service_info.ssdp import SsdpServiceInfo
 from homeassistant.const import (
@@ -18,7 +17,6 @@ from homeassistant.const import (
     CONF_PASSWORD,
     CONF_SCAN_INTERVAL,
     CONF_SSL,
-    CONF_VERIFY_SSL,
     CONF_USERNAME,
     CONF_PORT,
 )
@@ -128,6 +126,7 @@ class OptionsFlow(config_entries.OptionsFlow):
         """Initialize Keenetic options flow."""
         #self.config_entry = config_entry
         self._options = dict(config_entry.options)
+        self.router: Router | None = None
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -139,38 +138,59 @@ class OptionsFlow(config_entries.OptionsFlow):
         if self.router.hw_type != "router":
             return await self.async_step_configure_other()
 
-        return await self.async_step_configure_router()
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=[
+                "configure_general",
+                "configure_wifi",
+                "configure_clients",
+                "configure_features",
+                "save",
+            ],
+        )
 
 
-    async def async_step_configure_router(
-        self, 
+    async def async_step_configure_general(
+        self,
         user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         if user_input is not None:
             self._options.update(user_input)
-            return self.async_create_entry(title="", data=self._options)
+            return await self.async_step_init()
 
-        # Получаем список клиентов для политик и трекеров
-        data_clients = await self.router.show_ip_hotspot()
-        _LOGGER.debug(f'CONF_CLIENTS_SELECT_POLICY - {self._options.get(CONF_CLIENTS_SELECT_POLICY, [])}')
-        clients = {
-            client['mac']: f"{client['name'] or client['hostname']} ({client['mac']})"
-            for client in data_clients
-        }
-        clients_policy = clients
-        clients_policy |= {
-            mac: f"Unknown ({mac})"
-            for mac in self._options.get(CONF_CLIENTS_SELECT_POLICY, [])
-            if mac not in clients
-        }
-        clients_dt = clients
-        clients_dt |= {
-            mac: f"Unknown ({mac})"
-            for mac in self._options.get(CONF_SELECT_CREATE_DT, [])
-            if mac not in clients
-        }
+        coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id][COORD_FULL]
+        router = coordinator.router
+        system = coordinator.data.show_system
 
-        # Получаем список WiFi интерфейсов для QR-кодов
+        return self.async_show_form(
+            step_id="configure_general",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_SCAN_INTERVAL,
+                        default=self._options.get(
+                            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+                        ),
+                    ): vol.All(cv.positive_int, vol.Clamp(min=MIN_SCAN_INTERVAL)),
+                }
+            ),
+            description_placeholders={
+                "model": router.model or "Keenetic",
+                "host": self.config_entry.data.get(CONF_HOST, ""),
+                "mode": getattr(router, "hw_type", ""),
+                "uptime": str(system.get("uptime", "")),
+                "clients": str(len(coordinator.data.show_ip_hotspot)),
+            },
+        )
+
+    async def async_step_configure_wifi(
+        self,
+        user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        if user_input is not None:
+            self._options.update(user_input)
+            return await self.async_step_init()
+
         wifi_interfaces = {}
         try:
             if COORD_RC_INTERFACE in self.hass.data[DOMAIN][self.config_entry.entry_id]:
@@ -183,7 +203,6 @@ class OptionsFlow(config_entries.OptionsFlow):
         except Exception as e:
             _LOGGER.error(f"Error getting WiFi interfaces: {e}")
         
-        # Добавляем неизвестные интерфейсы из сохраненных настроек
         wifi_interfaces |= {
             interface_id: f"Unknown ({interface_id})"
             for interface_id in self._options.get(CONF_SELECT_WIFI_QR, [])
@@ -191,15 +210,9 @@ class OptionsFlow(config_entries.OptionsFlow):
         }
 
         return self.async_show_form(
-            step_id="configure_router",
+            step_id="configure_wifi",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(
-                        CONF_SCAN_INTERVAL,
-                        default=self._options.get(
-                            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
-                        ),
-                    ): vol.All(cv.positive_int, vol.Clamp(min=MIN_SCAN_INTERVAL)),
                     vol.Optional(
                         CONF_CREATE_IMAGE_QR,
                         default=self._options.get(
@@ -212,6 +225,41 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ): cv.multi_select(
                         dict(sorted(wifi_interfaces.items(), key=operator.itemgetter(1)))
                     ),
+                }
+            ),
+        )
+
+    async def async_step_configure_clients(
+        self,
+        user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        if user_input is not None:
+            self._options.update(user_input)
+            return await self.async_step_init()
+
+        data_clients = await self.router.show_ip_hotspot()
+        _LOGGER.debug(f'CONF_CLIENTS_SELECT_POLICY - {self._options.get(CONF_CLIENTS_SELECT_POLICY, [])}')
+        clients = {
+            client["mac"]: f"{client.get('name') or client.get('hostname') or 'Unknown'} ({client['mac']})"
+            for client in data_clients
+        }
+        clients_policy = dict(clients)
+        clients_policy |= {
+            mac: f"Unknown ({mac})"
+            for mac in self._options.get(CONF_CLIENTS_SELECT_POLICY, [])
+            if mac not in clients
+        }
+        clients_dt = dict(clients)
+        clients_dt |= {
+            mac: f"Unknown ({mac})"
+            for mac in self._options.get(CONF_SELECT_CREATE_DT, [])
+            if mac not in clients
+        }
+
+        return self.async_show_form(
+            step_id="configure_clients",
+            data_schema=vol.Schema(
+                {
                     vol.Optional(
                         CONF_CREATE_ALL_CLIENTS_POLICY,
                         default=self._options.get(
@@ -236,6 +284,22 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ): cv.multi_select(
                         dict(sorted(clients_dt.items(), key=operator.itemgetter(1)))
                     ),
+                }
+            ),
+        )
+
+    async def async_step_configure_features(
+        self,
+        user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        if user_input is not None:
+            self._options.update(user_input)
+            return await self.async_step_init()
+
+        return self.async_show_form(
+            step_id="configure_features",
+            data_schema=vol.Schema(
+                {
                     vol.Optional(
                         CONF_CREATE_PORT_FRW,
                         default=self._options.get(
@@ -251,11 +315,26 @@ class OptionsFlow(config_entries.OptionsFlow):
                     ]),
                 }
             ),
-            last_step=False,
         )
 
+    async def async_step_configure_router(
+        self,
+        user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Keep backward-compatible entry point for older options flows."""
+        if user_input is not None:
+            self._options.update(user_input)
+            return self.async_create_entry(title="", data=self._options)
+        return await self.async_step_init(user_input)
+
+    async def async_step_save(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Save collected options."""
+        return self.async_create_entry(title="", data=self._options)
+
     async def async_step_configure_other(
-        self, 
+        self,
         user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         if user_input is not None:

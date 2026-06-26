@@ -1,24 +1,21 @@
-# v2.0.0
+# v2.1.0
 
-Major cleanup and stabilization release based on `v2.0.0-rc2`.
+Usability and diagnostics update for the Keenetic Router integration.
 
 ## What's new
 
-- Added binary sensors for router connectivity, interface connectivity, Ping Check, and USB/media status.
-- Added number entities for Wi-Fi client idle timeout.
-- Added support for more WAN/VPN interface types.
-- Added selected features from `malinovsku/ha-keenetic_api`.
-- Updated README files with current features, entities, options, and services.
+- Reworked the options flow into separate sections: General, Wi-Fi, Clients, and Features/backups.
+- Added a final Save action so several option sections can be changed in one flow.
+- Added router diagnostics to the General options screen: model, host, mode, client count, and uptime.
+- Added Wi-Fi radio diagnostic sensors for channel, channel width, bitrate, and temperature when the router provides them.
+- Added USB/storage diagnostic sensors for total, free, used, used percent, and partition state.
+- Expanded client `device_tracker` attributes with useful Wi-Fi/Ethernet details while keeping noisy nested data out of state attributes.
 
-## Fixes
+## Improved
 
-- Improved handling of routers without USB/media sections.
-- Improved handling of missing or unavailable Ping Check data.
-- Prevented firmware coordinator crashes when the router returns a non-JSON response for firmware data.
-- Fixed direct API service JSON parsing.
-- Fixed deprecated Home Assistant `ScannerEntity` import.
-- Fixed invalid generated sensor entity IDs for models with spaces or punctuation.
-- Fixed RC interface coordinator interval units.
+- Updated English and Russian translations for the new options menu.
+- Updated README files to describe the new settings structure and diagnostics.
+- Added a clearer Wi-Fi QR security note in the options flow.
 
 ## Notes
 

@@ -13,7 +13,7 @@
           "username": "Логин",
           "password": "Пароль",
           "ssl": "SSL сертификат",
-          "scan_interval": "Интервал скарирования (секунд)"
+          "scan_interval": "Интервал сканирования (секунд)"
         },
         "description": "Введите свои учетные данные Keenetic."
       }
@@ -21,13 +21,52 @@
   },
   "options": {
     "abort": {
+      "integration_not_setup": "Интеграция не настроена",
       "not_supported_settings": "Дополнительные настройки доступны \n только для типа router! \n У вас {hw_type}"
     },
     "step": {
+      "init": {
+        "menu_options": {
+          "configure_general": "Основное",
+          "configure_wifi": "Wi-Fi",
+          "configure_clients": "Клиенты",
+          "configure_features": "Функции и бэкапы",
+          "save": "Сохранить"
+        }
+      },
+      "configure_general": {
+        "description": "Роутер: {model}\nАдрес: {host}\nРежим: {mode}\nКлиентов: {clients}\nВремя работы: {uptime} секунд",
+        "data": {
+          "scan_interval": "Интервал сканирования (секунд)"
+        }
+      },
+      "configure_wifi": {
+        "description": "Выберите объекты QR-кодов Wi-Fi. QR-код содержит пароль Wi-Fi, поэтому не используйте один и тот же пароль для Wi-Fi и администрирования роутера.",
+        "data": {
+          "create_image_qr": "Создать QR-коды для всех Wi-Fi сетей",
+          "select_wifi_qr": "Создать QR-коды для выбранных Wi-Fi сетей"
+        }
+      },
+      "configure_clients": {
+        "description": "Выберите, какие объекты клиентов нужно создать.",
+        "data": {
+          "create_entity_all_clients_button_policy": "Создать политики для всех устройств",
+          "clients_select_policy": "Создать политики для выбранных устройств",
+          "create_device_tracker": "Создать device_tracker для всех устройств",
+          "create_select_device_tracker": "Создать device_tracker для выбранных устройств"
+        }
+      },
+      "configure_features": {
+        "description": "Дополнительные функции роутера.",
+        "data": {
+          "create_entity_port_forwarding": "Создать переключатели для правил перенаправления портов",
+          "backup_type_file": "Типы файлов резервного копирования"
+        }
+      },
       "configure_router": {
         "description": "Дополнительные настройки.",
         "data": {
-          "scan_interval": "Интервал скарирования (секунд)",
+          "scan_interval": "Интервал сканирования (секунд)",
           "create_image_qr": "Создать QR коды для всех WiFi сетей.",
           "select_wifi_qr": "Создать QR коды для выбранных WiFi сетей:",
           "create_entity_all_clients_button_policy": "Создать политики для всех устройств.",
@@ -41,7 +80,7 @@
       "configure_other": {
         "description": "Дополнительные настройки.",
         "data": {
-          "scan_interval": "Интервал скарирования (секунд)"
+          "scan_interval": "Интервал сканирования (секунд)"
         }
       }
     }
