@@ -69,6 +69,7 @@ For manual setup:
 
 After setup, open integration options. The options are split into sections:
 
+- Connection: router address, port, username, password, and SSL mode.
 - General: polling interval and current router diagnostics.
 - Wi-Fi: QR code image entities for all or selected Wi-Fi networks.
 - Clients: client policy selectors and device trackers for selected clients or all clients.

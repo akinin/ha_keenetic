@@ -125,15 +125,24 @@ class OptionsFlow(config_entries.OptionsFlow):
     def __init__(self, config_entry):
         """Initialize Keenetic options flow."""
         #self.config_entry = config_entry
+        self._data = dict(config_entry.data)
         self._options = dict(config_entry.options)
         self.router: Router | None = None
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        if self.config_entry.entry_id not in self.hass.data[DOMAIN]:
-            return self.async_abort(reason="integration_not_setup")
-        self.router = self.hass.data[DOMAIN][self.config_entry.entry_id][COORD_FULL].router
+        integration_data = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        if integration_data is None:
+            return self.async_show_menu(
+                step_id="init",
+                menu_options=[
+                    "configure_connection",
+                    "save",
+                ],
+            )
+
+        self.router = integration_data[COORD_FULL].router
 
         if self.router.hw_type != "router":
             return await self.async_step_configure_other()
@@ -141,12 +150,60 @@ class OptionsFlow(config_entries.OptionsFlow):
         return self.async_show_menu(
             step_id="init",
             menu_options=[
+                "configure_connection",
                 "configure_general",
                 "configure_wifi",
                 "configure_clients",
                 "configure_features",
                 "save",
             ],
+        )
+
+    async def async_step_configure_connection(
+        self,
+        user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            new_data = dict(self._data)
+            new_data.update(user_input)
+            try:
+                await get_api(self.hass, new_data)
+            except Exception as error:
+                _LOGGER.error("Keenetic connection settings validation failed: %s", error)
+                errors["base"] = "cannot_connect"
+            else:
+                self._data = new_data
+                return await self.async_step_init()
+
+        return self.async_show_form(
+            step_id="configure_connection",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_HOST,
+                        default=self._data.get(CONF_HOST, "http://192.168.1.1"),
+                    ): str,
+                    vol.Required(
+                        CONF_PORT,
+                        default=self._data.get(CONF_PORT, 80),
+                    ): int,
+                    vol.Required(
+                        CONF_USERNAME,
+                        default=self._data.get(CONF_USERNAME, "admin"),
+                    ): cv.string,
+                    vol.Required(
+                        CONF_PASSWORD,
+                        default=self._data.get(CONF_PASSWORD, ""),
+                    ): cv.string,
+                    vol.Required(
+                        CONF_SSL,
+                        default=self._data.get(CONF_SSL, False),
+                    ): bool,
+                }
+            ),
+            errors=errors,
         )
 
 
@@ -176,7 +233,7 @@ class OptionsFlow(config_entries.OptionsFlow):
             ),
             description_placeholders={
                 "model": router.model or "Keenetic",
-                "host": self.config_entry.data.get(CONF_HOST, ""),
+                "host": self._data.get(CONF_HOST, ""),
                 "mode": getattr(router, "hw_type", ""),
                 "uptime": str(system.get("uptime", "")),
                 "clients": str(len(coordinator.data.show_ip_hotspot)),
@@ -331,6 +388,11 @@ class OptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Save collected options."""
+        if self._data != dict(self.config_entry.data):
+            self.hass.config_entries.async_update_entry(
+                self.config_entry,
+                data=self._data,
+            )
         return self.async_create_entry(title="", data=self._options)
 
     async def async_step_configure_other(

@@ -1,22 +1,18 @@
-# v2.1.0
+# v2.1.1
 
-Usability and diagnostics update for the Keenetic Router integration.
+Bugfix release for the Keenetic Router integration.
 
-## What's new
+## Fixed
 
-- Reworked the options flow into separate sections: General, Wi-Fi, Clients, and Features/backups.
-- Added a final Save action so several option sections can be changed in one flow.
-- Added router diagnostics to the General options screen: model, host, mode, client count, and uptime.
-- Added Wi-Fi radio diagnostic sensors for channel, channel width, bitrate, and temperature when the router provides them.
-- Added USB/storage diagnostic sensors for total, free, used, used percent, and partition state.
-- Expanded client `device_tracker` attributes with useful Wi-Fi/Ethernet details while keeping noisy nested data out of state attributes.
+- Restored compatibility of the sensor platform by avoiding newer Home Assistant constants for Wi-Fi temperature units.
+- Removed the strict data-rate device class from the Wi-Fi bitrate diagnostic sensor to avoid unit validation issues on different Home Assistant versions.
 
-## Improved
+## Added
 
-- Updated English and Russian translations for the new options menu.
-- Updated README files to describe the new settings structure and diagnostics.
-- Added a clearer Wi-Fi QR security note in the options flow.
+- Added a Connection section to integration options.
+- Router host, port, username, password, and SSL mode can now be edited after setup.
+- New connection settings are validated before they are saved.
 
 ## Notes
 
-This release is intended to be published as the latest stable release.
+After changing connection settings, save the options flow so Home Assistant reloads the integration with the new router data.

@@ -27,14 +27,28 @@
     "abort": {
       "integration_not_setup": "Integration is not set up"
     },
+    "error": {
+      "cannot_connect": "Failed to connect"
+    },
     "step": {
       "init": {
         "menu_options": {
+          "configure_connection": "Connection",
           "configure_general": "General",
           "configure_wifi": "Wi-Fi",
           "configure_clients": "Clients",
           "configure_features": "Features and backups",
           "save": "Save"
+        }
+      },
+      "configure_connection": {
+        "description": "Edit router connection settings. The new settings are checked before they are saved.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "username": "Username",
+          "password": "Password",
+          "ssl": "Use SSL"
         }
       },
       "configure_general": {

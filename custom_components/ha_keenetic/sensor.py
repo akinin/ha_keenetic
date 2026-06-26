@@ -14,10 +14,9 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import (
     EntityCategory,
-    PERCENTAGE, 
+    PERCENTAGE,
     UnitOfDataRate,
     UnitOfInformation,
-    UnitOfTemperature,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -172,7 +171,7 @@ WIFI_RADIO_SENSOR_TYPES: tuple[KeeneticInterfaceSensorEntityDescription, ...] = 
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        native_unit_of_measurement="°C",
         value=lambda data, interface_id: data.show_interface.get(interface_id, {}).get("temperature"),
     ),
     KeeneticInterfaceSensorEntityDescription(
@@ -194,7 +193,6 @@ WIFI_RADIO_SENSOR_TYPES: tuple[KeeneticInterfaceSensorEntityDescription, ...] = 
     ),
     KeeneticInterfaceSensorEntityDescription(
         key="wifi_bitrate",
-        device_class=SensorDeviceClass.DATA_RATE,
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         native_unit_of_measurement="bit/s",
