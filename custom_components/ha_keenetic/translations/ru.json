@@ -32,6 +32,7 @@
         "menu_options": {
           "configure_connection": "Подключение",
           "configure_general": "Основное",
+          "configure_sensors": "Сенсоры",
           "configure_wifi": "Wi-Fi",
           "configure_clients": "Клиенты",
           "configure_features": "Функции и бэкапы",
@@ -52,6 +53,12 @@
         "description": "Роутер: {model}\nАдрес: {host}\nРежим: {mode}\nКлиентов: {clients}\nВремя работы: {uptime} секунд",
         "data": {
           "scan_interval": "Интервал сканирования (секунд)"
+        }
+      },
+      "configure_sensors": {
+        "description": "Выберите, какие группы диагностических сенсоров нужно создать. Отключенные группы будут удалены из реестра сущностей после сохранения.",
+        "data": {
+          "sensor_groups": "Группы сенсоров"
         }
       },
       "configure_wifi": {

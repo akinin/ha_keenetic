@@ -30,6 +30,13 @@ from .keenetic import KeeneticFullData
 from .const import (
     DOMAIN,
     COORD_FULL,
+    CONF_SENSOR_GROUPS,
+    DEFAULT_SENSOR_GROUPS,
+    SENSOR_GROUP_INTERFACE,
+    SENSOR_GROUP_MESH,
+    SENSOR_GROUP_ROUTER,
+    SENSOR_GROUP_STORAGE,
+    SENSOR_GROUP_WIFI,
 )
 from .icons import ICON_MESH_NODE, ICON_MESH_NODE_OFFLINE
 
@@ -280,65 +287,68 @@ async def async_setup_entry(
     """Set up the Keenetic sensor."""
     coordinator = hass.data[DOMAIN][entry.entry_id][COORD_FULL]
     sensors = []
+    sensor_groups = set(entry.options.get(CONF_SENSOR_GROUPS, DEFAULT_SENSOR_GROUPS))
     
-    # Добавляем сенсоры из SENSOR_TYPES
-    for description in SENSOR_TYPES:
-        try:
-            if description.value(coordinator, description.key) is not None:
-                sensors.append(KeeneticRouterSensor(coordinator, description, description.key, description.key))
-        except Exception as err:
-            _LOGGER.debug(f'async_setup_entry sensor SENSOR_TYPES {description} err - {err}')
-
-    for interface_id in coordinator.router.request_interface:
-        for description in INTERFACE_SENSOR_TYPES:
+    if SENSOR_GROUP_ROUTER in sensor_groups:
+        for description in SENSOR_TYPES:
             try:
-                if description.value(coordinator.data, interface_id) is not None:
-                    sensors.append(
-                        KeeneticInterfaceStatSensor(
-                            coordinator,
-                            description,
-                            interface_id,
-                        )
-                    )
+                if description.value(coordinator, description.key) is not None:
+                    sensors.append(KeeneticRouterSensor(coordinator, description, description.key, description.key))
             except Exception as err:
-                _LOGGER.debug("Interface sensor setup skipped for %s %s: %s", interface_id, description.key, err)
+                _LOGGER.debug(f'async_setup_entry sensor SENSOR_TYPES {description} err - {err}')
 
-    for interface_id, interface_data in coordinator.data.show_interface.items():
-        if not interface_id.startswith("WifiMaster"):
-            continue
-
-        for description in WIFI_RADIO_SENSOR_TYPES:
-            try:
-                if description.value(coordinator.data, interface_id) is not None:
-                    sensors.append(
-                        KeeneticWifiRadioSensor(
-                            coordinator,
-                            description,
-                            interface_id,
-                            interface_data,
+    if SENSOR_GROUP_INTERFACE in sensor_groups:
+        for interface_id in coordinator.router.request_interface:
+            for description in INTERFACE_SENSOR_TYPES:
+                try:
+                    if description.value(coordinator.data, interface_id) is not None:
+                        sensors.append(
+                            KeeneticInterfaceStatSensor(
+                                coordinator,
+                                description,
+                                interface_id,
+                            )
                         )
-                    )
-            except Exception as err:
-                _LOGGER.debug("Wi-Fi radio sensor setup skipped for %s %s: %s", interface_id, description.key, err)
+                except Exception as err:
+                    _LOGGER.debug("Interface sensor setup skipped for %s %s: %s", interface_id, description.key, err)
 
-    for media_id, partition_id, partition_data in iter_storage_partitions(coordinator.data.show_media):
-        for description in STORAGE_SENSOR_TYPES:
-            try:
-                if description.value(partition_data) is not None:
-                    sensors.append(
-                        KeeneticStorageSensor(
-                            coordinator,
-                            description,
-                            media_id,
-                            partition_id,
-                            partition_data,
+    if SENSOR_GROUP_WIFI in sensor_groups:
+        for interface_id, interface_data in coordinator.data.show_interface.items():
+            if not interface_id.startswith("WifiMaster"):
+                continue
+
+            for description in WIFI_RADIO_SENSOR_TYPES:
+                try:
+                    if description.value(coordinator.data, interface_id) is not None:
+                        sensors.append(
+                            KeeneticWifiRadioSensor(
+                                coordinator,
+                                description,
+                                interface_id,
+                                interface_data,
+                            )
                         )
-                    )
-            except Exception as err:
-                _LOGGER.debug("Storage sensor setup skipped for %s %s %s: %s", media_id, partition_id, description.key, err)
+                except Exception as err:
+                    _LOGGER.debug("Wi-Fi radio sensor setup skipped for %s %s: %s", interface_id, description.key, err)
 
-    # Добавляем сенсоры для Mesh-узлов
-    if coordinator.router.hw_type == "router":
+    if SENSOR_GROUP_STORAGE in sensor_groups:
+        for media_id, partition_id, partition_data in iter_storage_partitions(coordinator.data.show_media):
+            for description in STORAGE_SENSOR_TYPES:
+                try:
+                    if description.value(partition_data) is not None:
+                        sensors.append(
+                            KeeneticStorageSensor(
+                                coordinator,
+                                description,
+                                media_id,
+                                partition_id,
+                                partition_data,
+                            )
+                        )
+                except Exception as err:
+                    _LOGGER.debug("Storage sensor setup skipped for %s %s %s: %s", media_id, partition_id, description.key, err)
+
+    if coordinator.router.hw_type == "router" and SENSOR_GROUP_MESH in sensor_groups:
         try:
             _LOGGER.debug("Attempting to get mesh nodes")
             mesh_nodes = await coordinator.router.get_mesh_nodes()

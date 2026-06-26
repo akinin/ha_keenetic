@@ -31,6 +31,7 @@ from .keenetic import Router
 from .const import (
     DEFAULT_SCAN_INTERVAL, 
     MIN_SCAN_INTERVAL,
+    CONF_SENSOR_GROUPS,
     CONF_CLIENTS_SELECT_POLICY,
     CONF_CREATE_ALL_CLIENTS_POLICY,
     CONF_CREATE_IMAGE_QR,
@@ -38,8 +39,14 @@ from .const import (
     CONF_CREATE_DT,
     CONF_CREATE_PORT_FRW,
     DEFAULT_BACKUP_TYPE_FILE,
+    DEFAULT_SENSOR_GROUPS,
     CONF_BACKUP_TYPE_FILE,
     CONF_SELECT_CREATE_DT,
+    SENSOR_GROUP_INTERFACE,
+    SENSOR_GROUP_MESH,
+    SENSOR_GROUP_ROUTER,
+    SENSOR_GROUP_STORAGE,
+    SENSOR_GROUP_WIFI,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -152,6 +159,7 @@ class OptionsFlow(config_entries.OptionsFlow):
             menu_options=[
                 "configure_connection",
                 "configure_general",
+                "configure_sensors",
                 "configure_wifi",
                 "configure_clients",
                 "configure_features",
@@ -238,6 +246,43 @@ class OptionsFlow(config_entries.OptionsFlow):
                 "uptime": str(system.get("uptime", "")),
                 "clients": str(len(coordinator.data.show_ip_hotspot)),
             },
+        )
+
+    async def async_step_configure_sensors(
+        self,
+        user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        if user_input is not None:
+            self._options.update(user_input)
+            return await self.async_step_init()
+
+        if (self.hass.config.language or "").startswith("ru"):
+            sensor_groups = {
+                SENSOR_GROUP_ROUTER: "Диагностика роутера",
+                SENSOR_GROUP_INTERFACE: "Трафик интерфейсов",
+                SENSOR_GROUP_WIFI: "Wi-Fi радио",
+                SENSOR_GROUP_STORAGE: "Накопители",
+                SENSOR_GROUP_MESH: "Mesh",
+            }
+        else:
+            sensor_groups = {
+                SENSOR_GROUP_ROUTER: "Router diagnostics",
+                SENSOR_GROUP_INTERFACE: "Interface traffic",
+                SENSOR_GROUP_WIFI: "Wi-Fi radio",
+                SENSOR_GROUP_STORAGE: "Storage",
+                SENSOR_GROUP_MESH: "Mesh",
+            }
+
+        return self.async_show_form(
+            step_id="configure_sensors",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_SENSOR_GROUPS,
+                        default=self._options.get(CONF_SENSOR_GROUPS, DEFAULT_SENSOR_GROUPS),
+                    ): cv.multi_select(sensor_groups),
+                }
+            ),
         )
 
     async def async_step_configure_wifi(

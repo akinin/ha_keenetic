@@ -35,6 +35,7 @@
         "menu_options": {
           "configure_connection": "Connection",
           "configure_general": "General",
+          "configure_sensors": "Sensors",
           "configure_wifi": "Wi-Fi",
           "configure_clients": "Clients",
           "configure_features": "Features and backups",
@@ -55,6 +56,12 @@
         "description": "Router: {model}\nHost: {host}\nMode: {mode}\nClients: {clients}\nUptime: {uptime} seconds",
         "data": {
           "scan_interval": "Scan interval (seconds)"
+        }
+      },
+      "configure_sensors": {
+        "description": "Choose which diagnostic sensor groups should be created. Disabled groups are removed from the entity registry after saving.",
+        "data": {
+          "sensor_groups": "Sensor groups"
         }
       },
       "configure_wifi": {

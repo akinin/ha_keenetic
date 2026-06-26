@@ -46,7 +46,18 @@ from .const import (
     CONF_CREATE_PORT_FRW,
     CONF_CREATE_IMAGE_QR,
     CONF_SELECT_CREATE_DT,
+    CONF_SENSOR_GROUPS,
+    DEFAULT_SENSOR_GROUPS,
+    INTERFACE_SENSOR_KEYS,
+    ROUTER_SENSOR_KEYS,
     SCAN_INTERVAL_RC_INTERFACE,
+    SENSOR_GROUP_INTERFACE,
+    SENSOR_GROUP_MESH,
+    SENSOR_GROUP_ROUTER,
+    SENSOR_GROUP_STORAGE,
+    SENSOR_GROUP_WIFI,
+    STORAGE_SENSOR_KEYS,
+    WIFI_RADIO_SENSOR_KEYS,
 )
 
 PLATFORMS: list[Platform] = [
@@ -138,12 +149,15 @@ async def get_api(hass: HomeAssistant, data: dict[str, Any]) -> Router:
 def remove_entities_or_devices(hass, entry) -> None:
     entity_registry = er.async_get(hass)
     entity_conf = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
+    sensor_groups = set(entry.options.get(CONF_SENSOR_GROUPS, DEFAULT_SENSOR_GROUPS))
     for entity in entity_conf:
         delete_ent = False
+        state = hass.states.get(entity.entity_id)
+        attributes = state.attributes if state is not None else {}
         if (
             entity.domain == "device_tracker" 
             and not entry.options.get(CONF_CREATE_DT, False) 
-            and hass.states.get(entity.entity_id).attributes.get("mac") not in entry.options.get(CONF_SELECT_CREATE_DT, []) 
+            and attributes.get("mac") not in entry.options.get(CONF_SELECT_CREATE_DT, [])
         ):
             delete_ent = True
         elif (
@@ -162,8 +176,10 @@ def remove_entities_or_devices(hass, entry) -> None:
             entity.domain == "select" 
             and entity.translation_key == "client_policy"
             and not entry.options.get(CONF_CREATE_ALL_CLIENTS_POLICY, False) 
-            and hass.states.get(entity.entity_id).attributes.get("mac") not in entry.options.get(CONF_CLIENTS_SELECT_POLICY, []) 
+            and attributes.get("mac") not in entry.options.get(CONF_CLIENTS_SELECT_POLICY, [])
         ):
+            delete_ent = True
+        elif entity.domain == "sensor" and should_remove_sensor_entity(entity, sensor_groups):
             delete_ent = True
         if delete_ent:
             _LOGGER.debug(f"Removing entity: {entity}")
@@ -179,3 +195,17 @@ def remove_entities_or_devices(hass, entry) -> None:
         elif not any(x in {x.entity_id for x in entity_conf} for x in {x.entity_id for x in entity_dev}):
             _LOGGER.debug(f"Update device, remove_config_entry_id: {device_entry}")
             device_registry.async_update_device(device_entry.id, remove_config_entry_id=entry.entry_id)
+
+
+def should_remove_sensor_entity(entity: er.RegistryEntry, sensor_groups: set[str]) -> bool:
+    """Return true if a sensor belongs to a disabled optional sensor group."""
+    translation_key = entity.translation_key
+    unique_id = entity.unique_id or ""
+
+    return (
+        (translation_key in ROUTER_SENSOR_KEYS and SENSOR_GROUP_ROUTER not in sensor_groups)
+        or (translation_key in INTERFACE_SENSOR_KEYS and SENSOR_GROUP_INTERFACE not in sensor_groups)
+        or (translation_key in WIFI_RADIO_SENSOR_KEYS and SENSOR_GROUP_WIFI not in sensor_groups)
+        or (translation_key in STORAGE_SENSOR_KEYS and SENSOR_GROUP_STORAGE not in sensor_groups)
+        or ("_mesh_node_" in unique_id and SENSOR_GROUP_MESH not in sensor_groups)
+    )

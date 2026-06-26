@@ -1,12 +1,18 @@
-# v2.1.2
+# v2.1.3
 
-Bugfix release for the Keenetic Router integration.
+Sensor selection update for the Keenetic Router integration.
 
-## Fixed
+## Added
 
-- Fixed sensor platform setup when Keenetic returns USB/media partitions as a dictionary instead of a list.
-- Restored router diagnostic sensors that could become unavailable after the media diagnostics update.
+- Added a Sensors section to integration options.
+- Sensor groups can now be enabled or disabled:
+  - Router diagnostics
+  - Interface traffic
+  - Wi-Fi radio
+  - Storage
+  - Mesh
+- Disabled sensor groups are removed from the Home Assistant entity registry after saving options.
 
 ## Notes
 
-This release supersedes `v2.1.1`. If diagnostics such as CPU load, memory, uptime, hostname, domain name, WAN IP, or Wi-Fi clients are unavailable, update to this version and restart Home Assistant.
+Existing installations keep all sensor groups enabled by default.

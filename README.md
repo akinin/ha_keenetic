@@ -71,6 +71,7 @@ After setup, open integration options. The options are split into sections:
 
 - Connection: router address, port, username, password, and SSL mode.
 - General: polling interval and current router diagnostics.
+- Sensors: diagnostic sensor groups to create or remove.
 - Wi-Fi: QR code image entities for all or selected Wi-Fi networks.
 - Clients: client policy selectors and device trackers for selected clients or all clients.
 - Features and backups: port forwarding switches and backup file types.
