@@ -131,6 +131,18 @@
       },
       "wan_ip_adress": {
         "name": "WAN IP"
+      },
+      "rxspeed": {
+        "name": "{name} download speed"
+      },
+      "txspeed": {
+        "name": "{name} upload speed"
+      },
+      "rxbytes": {
+        "name": "{name} downloaded"
+      },
+      "txbytes": {
+        "name": "{name} uploaded"
       }
     },
     "binary_sensor": {

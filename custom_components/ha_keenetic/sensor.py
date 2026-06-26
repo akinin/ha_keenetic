@@ -1,29 +1,25 @@
 """The Keenetic API sensor entities."""
 
-from dataclasses import dataclass
 from collections.abc import Callable
-from typing import Any
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 import logging
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
-    SensorStateClass,
     SensorEntity,
     SensorEntityDescription,
+    SensorStateClass,
 )
 from homeassistant.const import (
+    EntityCategory,
     PERCENTAGE, 
-    UnitOfInformation, 
-    EntityCategory, 
     UnitOfDataRate,
     UnitOfInformation,
-    UnitOfTime,
 )
-from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers import device_registry as dr
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -47,6 +43,13 @@ class KeeneticRouterSensorEntityDescription(SensorEntityDescription):
         lambda coordinator, key: coordinator.data.show_system[key] if coordinator.data.show_system[key] is not None else None
     )
     attributes_fn: Callable[[KeeneticFullData], dict[str, Any]] | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class KeeneticInterfaceSensorEntityDescription(SensorEntityDescription):
+    """A class that describes interface statistic sensor entities."""
+
+    value: Callable[[KeeneticFullData, str], StateType]
 
 
 def convert_uptime(uptime: int) -> datetime:
@@ -120,6 +123,41 @@ SENSOR_TYPES: tuple[KeeneticRouterSensorEntityDescription, ...] = (
     ),
 )
 
+INTERFACE_SENSOR_TYPES: tuple[KeeneticInterfaceSensorEntityDescription, ...] = (
+    KeeneticInterfaceSensorEntityDescription(
+        key="rxspeed",
+        device_class=SensorDeviceClass.DATA_RATE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
+        value=lambda data, interface_id: data.stat_interface.get(interface_id, {}).get("rxspeed"),
+    ),
+    KeeneticInterfaceSensorEntityDescription(
+        key="txspeed",
+        device_class=SensorDeviceClass.DATA_RATE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
+        value=lambda data, interface_id: data.stat_interface.get(interface_id, {}).get("txspeed"),
+    ),
+    KeeneticInterfaceSensorEntityDescription(
+        key="rxbytes",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        value=lambda data, interface_id: data.stat_interface.get(interface_id, {}).get("rxbytes"),
+    ),
+    KeeneticInterfaceSensorEntityDescription(
+        key="txbytes",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        value=lambda data, interface_id: data.stat_interface.get(interface_id, {}).get("txbytes"),
+    ),
+)
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -136,6 +174,20 @@ async def async_setup_entry(
                 sensors.append(KeeneticRouterSensor(coordinator, description, description.key, description.key))
         except Exception as err:
             _LOGGER.debug(f'async_setup_entry sensor SENSOR_TYPES {description} err - {err}')
+
+    for interface_id in coordinator.router.request_interface:
+        for description in INTERFACE_SENSOR_TYPES:
+            try:
+                if description.value(coordinator.data, interface_id) is not None:
+                    sensors.append(
+                        KeeneticInterfaceStatSensor(
+                            coordinator,
+                            description,
+                            interface_id,
+                        )
+                    )
+            except Exception as err:
+                _LOGGER.debug("Interface sensor setup skipped for %s %s: %s", interface_id, description.key, err)
 
     # Добавляем сенсоры для Mesh-узлов
     if coordinator.router.hw_type == "router":
@@ -265,3 +317,46 @@ class KeeneticRouterSensor(CoordinatorEntity[KeeneticRouterCoordinator], SensorE
             return self.entity_description.attributes_fn(self.coordinator.data)
         else:
             return None
+
+
+class KeeneticInterfaceStatSensor(CoordinatorEntity[KeeneticRouterCoordinator], SensorEntity):
+    """Representation of a Keenetic interface statistic sensor."""
+
+    _attr_has_entity_name = True
+    entity_description: KeeneticInterfaceSensorEntityDescription
+
+    def __init__(
+        self,
+        coordinator: KeeneticRouterCoordinator,
+        description: KeeneticInterfaceSensorEntityDescription,
+        interface_id: str,
+    ) -> None:
+        """Initialize the interface statistic sensor."""
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._interface_id = interface_id
+        self._interface_name = coordinator.router.request_interface.get(interface_id, interface_id)
+        self._attr_device_info = coordinator.device_info
+        self._attr_unique_id = f"{coordinator.router.mac}_{interface_id}_{description.key}"
+        self._attr_translation_key = description.key
+        self._attr_translation_placeholders = {"name": self._interface_name}
+
+    @property
+    def native_value(self) -> StateType:
+        """Return interface statistic value."""
+        return self.entity_description.value(self.coordinator.data, self._interface_id)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, StateType]:
+        """Return normalized interface attributes."""
+        interface_data = self.coordinator.data.show_interface.get(self._interface_id, {})
+        return {
+            "interface_id": self._interface_id,
+            "interface_name": self._interface_name,
+            "interface_type": interface_data.get("type"),
+            "description": interface_data.get("description"),
+            "state": interface_data.get("state"),
+            "link": interface_data.get("link"),
+            "connected": interface_data.get("connected"),
+            "ip_address": interface_data.get("address"),
+        }

@@ -39,6 +39,8 @@ Home Assistant custom integration for Keenetic routers. It talks to the local Ke
 
 The integration connects to the router web API over HTTP or HTTPS using the host, port, username, and password configured in Home Assistant. Use a local router address whenever possible and avoid exposing the router interface outside your trusted network.
 
+Security note: Wi-Fi QR code entities include the Wi-Fi password by design. Do not use the same password for Wi-Fi networks and the Keenetic administrator account.
+
 For automatic discovery, enable UPnP in the Keenetic web interface:
 
 ![UPnP setting](images/0-1.png)

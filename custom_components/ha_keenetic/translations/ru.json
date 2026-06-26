@@ -127,6 +127,18 @@
       },
       "wan_ip_adress": {
         "name": "Внешний IP"
+      },
+      "rxspeed": {
+        "name": "{name} входящая скорость"
+      },
+      "txspeed": {
+        "name": "{name} исходящая скорость"
+      },
+      "rxbytes": {
+        "name": "{name} загружено"
+      },
+      "txbytes": {
+        "name": "{name} выгружено"
       }
     },
     "binary_sensor": {
