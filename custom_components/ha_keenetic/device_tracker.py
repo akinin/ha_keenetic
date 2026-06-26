@@ -51,6 +51,8 @@ async def async_setup_entry(
 
 class KeeneticScannerEntity(CoordinatorEntity[KeeneticRouterCoordinator], ScannerEntity, RestoreEntity):
     _unrecorded_attributes = frozenset({
+        "first_seen",
+        "last_seen",
         "uptime",
         "rssi",
         "rxbytes",
@@ -99,13 +101,43 @@ class KeeneticScannerEntity(CoordinatorEntity[KeeneticRouterCoordinator], Scanne
         """Return the state attributes of the device."""
         if self._mac in self.coordinator.data.show_ip_hotspot:
             dt_hotspot = self.coordinator.data.show_ip_hotspot[self._mac]
+            raw = dt_hotspot.raw or {}
+            interface = raw.get("interface", {})
+            traffic_shape = raw.get("traffic-shape", {})
             self._ip_address = dt_hotspot.ip
-            return {"interface_type": dt_hotspot.interface_id,
-                    "uptime": dt_hotspot.uptime,
-                    "rssi": dt_hotspot.rssi,
-                    "rxbytes": dt_hotspot.rxbytes,
-                    "txbytes": dt_hotspot.txbytes,
-                    }
+            attributes = {
+                "ip_address": dt_hotspot.ip,
+                "hostname": dt_hotspot.hostname,
+                "name": dt_hotspot.name,
+                "interface_id": dt_hotspot.interface_id,
+                "interface_name": interface.get("name"),
+                "interface_description": interface.get("description"),
+                "registered": raw.get("registered"),
+                "access": raw.get("access"),
+                "policy": raw.get("policy"),
+                "priority": raw.get("priority"),
+                "link": raw.get("link"),
+                "port": raw.get("port"),
+                "speed": raw.get("speed"),
+                "duplex": raw.get("duplex"),
+                "ssid": raw.get("ssid"),
+                "ap": raw.get("ap"),
+                "authenticated": raw.get("authenticated"),
+                "txrate": raw.get("txrate"),
+                "ht": raw.get("ht"),
+                "mode": raw.get("mode"),
+                "rssi": dt_hotspot.rssi,
+                "mcs": raw.get("mcs"),
+                "security": raw.get("security"),
+                "uptime": dt_hotspot.uptime,
+                "first_seen": raw.get("first-seen"),
+                "last_seen": raw.get("last-seen"),
+                "rxbytes": dt_hotspot.rxbytes,
+                "txbytes": dt_hotspot.txbytes,
+                "traffic_shape_rx": traffic_shape.get("rx"),
+                "traffic_shape_tx": traffic_shape.get("tx"),
+            }
+            return {key: value for key, value in attributes.items() if value is not None}
         else:
             return None
 

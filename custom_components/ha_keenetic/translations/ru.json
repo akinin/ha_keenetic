@@ -139,6 +139,33 @@
       },
       "txbytes": {
         "name": "{name} выгружено"
+      },
+      "wifi_temperature": {
+        "name": "{name} температура"
+      },
+      "wifi_channel": {
+        "name": "{name} канал"
+      },
+      "wifi_bandwidth": {
+        "name": "{name} ширина канала"
+      },
+      "wifi_bitrate": {
+        "name": "{name} битрейт"
+      },
+      "storage_total": {
+        "name": "{name} всего"
+      },
+      "storage_free": {
+        "name": "{name} свободно"
+      },
+      "storage_used": {
+        "name": "{name} занято"
+      },
+      "storage_used_percent": {
+        "name": "{name} занято"
+      },
+      "storage_state": {
+        "name": "{name} состояние"
       }
     },
     "binary_sensor": {

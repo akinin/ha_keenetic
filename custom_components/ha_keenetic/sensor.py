@@ -17,6 +17,7 @@ from homeassistant.const import (
     PERCENTAGE, 
     UnitOfDataRate,
     UnitOfInformation,
+    UnitOfTemperature,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -50,6 +51,13 @@ class KeeneticInterfaceSensorEntityDescription(SensorEntityDescription):
     """A class that describes interface statistic sensor entities."""
 
     value: Callable[[KeeneticFullData, str], StateType]
+
+
+@dataclass(frozen=True, kw_only=True)
+class KeeneticStorageSensorEntityDescription(SensorEntityDescription):
+    """A class that describes storage partition sensor entities."""
+
+    value: Callable[[dict[str, Any]], StateType]
 
 
 def convert_uptime(uptime: int) -> datetime:
@@ -158,6 +166,100 @@ INTERFACE_SENSOR_TYPES: tuple[KeeneticInterfaceSensorEntityDescription, ...] = (
     ),
 )
 
+WIFI_RADIO_SENSOR_TYPES: tuple[KeeneticInterfaceSensorEntityDescription, ...] = (
+    KeeneticInterfaceSensorEntityDescription(
+        key="wifi_temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        value=lambda data, interface_id: data.show_interface.get(interface_id, {}).get("temperature"),
+    ),
+    KeeneticInterfaceSensorEntityDescription(
+        key="wifi_channel",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value=lambda data, interface_id: int(data.show_interface.get(interface_id, {}).get("channel"))
+        if data.show_interface.get(interface_id, {}).get("channel") is not None
+        else None,
+    ),
+    KeeneticInterfaceSensorEntityDescription(
+        key="wifi_bandwidth",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement="MHz",
+        value=lambda data, interface_id: int(data.show_interface.get(interface_id, {}).get("bandwidth"))
+        if data.show_interface.get(interface_id, {}).get("bandwidth") is not None
+        else None,
+    ),
+    KeeneticInterfaceSensorEntityDescription(
+        key="wifi_bitrate",
+        device_class=SensorDeviceClass.DATA_RATE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement="bit/s",
+        value=lambda data, interface_id: data.show_interface.get(interface_id, {}).get("bitrate"),
+    ),
+)
+
+STORAGE_SENSOR_TYPES: tuple[KeeneticStorageSensorEntityDescription, ...] = (
+    KeeneticStorageSensorEntityDescription(
+        key="storage_total",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        value=lambda partition: int(partition["total"]) if partition.get("total") is not None else None,
+    ),
+    KeeneticStorageSensorEntityDescription(
+        key="storage_free",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        value=lambda partition: int(partition["free"]) if partition.get("free") is not None else None,
+    ),
+    KeeneticStorageSensorEntityDescription(
+        key="storage_used",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        value=lambda partition: (
+            int(partition["total"]) - int(partition["free"])
+            if partition.get("total") is not None and partition.get("free") is not None
+            else None
+        ),
+    ),
+    KeeneticStorageSensorEntityDescription(
+        key="storage_used_percent",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement=PERCENTAGE,
+        value=lambda partition: (
+            round((int(partition["total"]) - int(partition["free"])) / int(partition["total"]) * 100, 1)
+            if partition.get("total") and partition.get("free") is not None
+            else None
+        ),
+    ),
+    KeeneticStorageSensorEntityDescription(
+        key="storage_state",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value=lambda partition: partition.get("state"),
+    ),
+)
+
+
+def iter_storage_partitions(show_media: dict[str, Any]) -> list[tuple[str, str, dict[str, Any]]]:
+    """Return flattened media partition rows."""
+    partitions = []
+    for media_id, media_data in show_media.items():
+        for partition in media_data.get("partition", []):
+            partition_id = partition.get("id") or partition.get("label") or media_id
+            partitions.append((media_id, partition_id, partition))
+    return partitions
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -188,6 +290,40 @@ async def async_setup_entry(
                     )
             except Exception as err:
                 _LOGGER.debug("Interface sensor setup skipped for %s %s: %s", interface_id, description.key, err)
+
+    for interface_id, interface_data in coordinator.data.show_interface.items():
+        if not interface_id.startswith("WifiMaster"):
+            continue
+
+        for description in WIFI_RADIO_SENSOR_TYPES:
+            try:
+                if description.value(coordinator.data, interface_id) is not None:
+                    sensors.append(
+                        KeeneticWifiRadioSensor(
+                            coordinator,
+                            description,
+                            interface_id,
+                            interface_data,
+                        )
+                    )
+            except Exception as err:
+                _LOGGER.debug("Wi-Fi radio sensor setup skipped for %s %s: %s", interface_id, description.key, err)
+
+    for media_id, partition_id, partition_data in iter_storage_partitions(coordinator.data.show_media):
+        for description in STORAGE_SENSOR_TYPES:
+            try:
+                if description.value(partition_data) is not None:
+                    sensors.append(
+                        KeeneticStorageSensor(
+                            coordinator,
+                            description,
+                            media_id,
+                            partition_id,
+                            partition_data,
+                        )
+                    )
+            except Exception as err:
+                _LOGGER.debug("Storage sensor setup skipped for %s %s %s: %s", media_id, partition_id, description.key, err)
 
     # Добавляем сенсоры для Mesh-узлов
     if coordinator.router.hw_type == "router":
@@ -359,4 +495,106 @@ class KeeneticInterfaceStatSensor(CoordinatorEntity[KeeneticRouterCoordinator], 
             "link": interface_data.get("link"),
             "connected": interface_data.get("connected"),
             "ip_address": interface_data.get("address"),
+        }
+
+
+class KeeneticWifiRadioSensor(CoordinatorEntity[KeeneticRouterCoordinator], SensorEntity):
+    """Representation of a Keenetic Wi-Fi radio diagnostic sensor."""
+
+    _attr_has_entity_name = True
+    entity_description: KeeneticInterfaceSensorEntityDescription
+
+    def __init__(
+        self,
+        coordinator: KeeneticRouterCoordinator,
+        description: KeeneticInterfaceSensorEntityDescription,
+        interface_id: str,
+        interface_data: dict[str, Any],
+    ) -> None:
+        """Initialize the Wi-Fi radio sensor."""
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._interface_id = interface_id
+        self._interface_name = interface_data.get("description") or interface_id
+        self._attr_device_info = coordinator.device_info
+        self._attr_unique_id = f"{coordinator.router.mac}_{interface_id}_{description.key}"
+        self._attr_translation_key = description.key
+        self._attr_translation_placeholders = {"name": self._interface_name}
+
+    @property
+    def native_value(self) -> StateType:
+        """Return Wi-Fi radio diagnostic value."""
+        return self.entity_description.value(self.coordinator.data, self._interface_id)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, StateType]:
+        """Return normalized Wi-Fi radio attributes."""
+        interface_data = self.coordinator.data.show_interface.get(self._interface_id, {})
+        return {
+            "interface_id": self._interface_id,
+            "interface_name": self._interface_name,
+            "state": interface_data.get("state"),
+            "link": interface_data.get("link"),
+            "connected": interface_data.get("connected"),
+            "channel": interface_data.get("channel"),
+            "bandwidth": interface_data.get("bandwidth"),
+            "bitrate": interface_data.get("bitrate"),
+            "temperature": interface_data.get("temperature"),
+        }
+
+
+class KeeneticStorageSensor(CoordinatorEntity[KeeneticRouterCoordinator], SensorEntity):
+    """Representation of a Keenetic storage partition sensor."""
+
+    _attr_has_entity_name = True
+    entity_description: KeeneticStorageSensorEntityDescription
+
+    def __init__(
+        self,
+        coordinator: KeeneticRouterCoordinator,
+        description: KeeneticStorageSensorEntityDescription,
+        media_id: str,
+        partition_id: str,
+        partition_data: dict[str, Any],
+    ) -> None:
+        """Initialize the storage sensor."""
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._media_id = media_id
+        self._partition_id = partition_id
+        self._partition_name = partition_data.get("label") or partition_id
+        self._attr_device_info = coordinator.device_info
+        storage_slug = slugify(f"{media_id}_{partition_id}")
+        self._attr_unique_id = f"{coordinator.router.mac}_{storage_slug}_{description.key}"
+        self._attr_translation_key = description.key
+        self._attr_translation_placeholders = {"name": self._partition_name}
+
+    @property
+    def native_value(self) -> StateType:
+        """Return storage partition diagnostic value."""
+        partition_data = self._partition_data
+        return self.entity_description.value(partition_data)
+
+    @property
+    def _partition_data(self) -> dict[str, Any]:
+        """Return the latest storage partition data."""
+        for media_id, partition_id, partition_data in iter_storage_partitions(self.coordinator.data.show_media):
+            if media_id == self._media_id and partition_id == self._partition_id:
+                return partition_data
+        return {}
+
+    @property
+    def extra_state_attributes(self) -> dict[str, StateType]:
+        """Return normalized storage attributes."""
+        media_data = self.coordinator.data.show_media.get(self._media_id, {})
+        partition_data = self._partition_data
+        return {
+            "media_id": self._media_id,
+            "partition_id": self._partition_id,
+            "label": partition_data.get("label"),
+            "filesystem": partition_data.get("fstype"),
+            "state": partition_data.get("state"),
+            "used_by": partition_data.get("used-by"),
+            "removable": media_data.get("removable"),
+            "ejectable": media_data.get("ejectable"),
         }

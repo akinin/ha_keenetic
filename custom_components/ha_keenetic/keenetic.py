@@ -47,6 +47,7 @@ class DataDevice():
     rssi: str
     rxbytes: int
     txbytes: int
+    raw: dict[str, Any] | None = None
 
 @dataclass
 class DataPortForwarding():
@@ -653,6 +654,7 @@ class Router:
                     hotspot.get('rssi'), 
                     hotspot.get('rxbytes'), 
                     hotspot.get('txbytes'), 
+                    hotspot,
                 )
             
             priority_interface = response_map.get("priority_interface", {}).get('show', {}).get('rc', {}).get('interface', {}).get('ip', {}).get('global', {})

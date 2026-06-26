@@ -143,6 +143,33 @@
       },
       "txbytes": {
         "name": "{name} uploaded"
+      },
+      "wifi_temperature": {
+        "name": "{name} temperature"
+      },
+      "wifi_channel": {
+        "name": "{name} channel"
+      },
+      "wifi_bandwidth": {
+        "name": "{name} channel width"
+      },
+      "wifi_bitrate": {
+        "name": "{name} bitrate"
+      },
+      "storage_total": {
+        "name": "{name} total"
+      },
+      "storage_free": {
+        "name": "{name} free"
+      },
+      "storage_used": {
+        "name": "{name} used"
+      },
+      "storage_used_percent": {
+        "name": "{name} used"
+      },
+      "storage_state": {
+        "name": "{name} state"
       }
     },
     "binary_sensor": {
