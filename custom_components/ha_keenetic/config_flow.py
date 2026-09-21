@@ -32,6 +32,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL, 
     MIN_SCAN_INTERVAL,
     CONF_SENSOR_GROUPS,
+    CONF_ROUTER_SERIAL,
     CONF_CLIENTS_SELECT_POLICY,
     CONF_CREATE_ALL_CLIENTS_POLICY,
     CONF_CREATE_IMAGE_QR,
@@ -50,6 +51,51 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _host_from_address(address: str | None) -> str | None:
+    """Extract a host from either a URL or a bare host in an existing entry."""
+    if not address:
+        return None
+    parsed = urlparse(address if "://" in address else f"//{address}")
+    return parsed.hostname.lower() if parsed.hostname else None
+
+
+def _matches_authenticated_router(
+    entry_unique_id: str | None, legacy_unique_id: str, serial_number: str | None
+) -> bool:
+    """Match both legacy MAC and SSDP-serial config entries after login."""
+    return bool(
+        entry_unique_id
+        and (
+            entry_unique_id == legacy_unique_id
+            or (serial_number and entry_unique_id == serial_number)
+        )
+    )
+
+
+def _same_serial(left: str | None, right: str | None) -> bool:
+    """Compare serials without depending on SSDP capitalization."""
+    return bool(left and right and str(left).strip().casefold() == str(right).strip().casefold())
+
+
+def _update_discovered_host(hass, entry, hostname: str) -> None:
+    """Follow a router's new address without changing its scheme or port."""
+    old_address = entry.data.get(CONF_HOST)
+    if not old_address or _host_from_address(old_address) == hostname.lower():
+        return
+    parsed = urlparse(old_address if "://" in old_address else f"//{old_address}")
+    scheme = parsed.scheme or ("https" if entry.data.get(CONF_SSL) else "http")
+    host = f"[{hostname}]" if ":" in hostname else hostname
+    userinfo = parsed.netloc.rpartition("@")[0] + "@" if "@" in parsed.netloc else ""
+    netloc = f"{userinfo}{host}"
+    if parsed.port is not None:
+        netloc += f":{parsed.port}"
+    new_address = parsed._replace(scheme=scheme, netloc=netloc).geturl()
+    hass.config_entries.async_update_entry(
+        entry,
+        data={**entry.data, CONF_HOST: new_address},
+    )
 
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
@@ -78,8 +124,42 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         serial = discovery_info.upnp.get("serialNumber")
         udn = discovery_info.upnp.get("UDN")
-        await self.async_set_unique_id(serial or udn or hostname)
-        self._abort_if_unique_id_configured(updates={CONF_HOST: f"http://{hostname}"})
+        self._discovered_serial = serial
+        discovery_id = serial or udn
+        if discovery_id:
+            await self.async_set_unique_id(discovery_id)
+            # A router configured from SSDP already uses this exact ID. Keep
+            # its scheme and port while following a changed DHCP address.
+            configured_entry = next(
+                (
+                    entry for entry in self._async_current_entries()
+                    if entry.unique_id == discovery_id
+                ),
+                None,
+            )
+            if configured_entry is not None and configured_entry.data.get(CONF_HOST):
+                _update_discovered_host(self.hass, configured_entry, hostname)
+                return self.async_abort(reason="already_configured")
+            self._abort_if_unique_id_configured()
+        else:
+            # A host address is not a stable device identity. Let Home
+            # Assistant handle discovery without a unique ID instead.
+            await self._async_handle_discovery_without_unique_id()
+
+        # Entries created by older releases use a MAC-based unique ID, so the
+        # SSDP serial/UDN above cannot match them. Prefer the serial read from
+        # the authenticated router; fall back to an unchanged host only when
+        # SSDP omits its serial or the entry has no stored serial yet.
+        for entry in self._async_current_entries():
+            stored_serial = entry.data.get(CONF_ROUTER_SERIAL)
+            if _same_serial(stored_serial, serial):
+                _update_discovered_host(self.hass, entry, hostname)
+                return self.async_abort(reason="already_configured")
+            if (
+                (not serial or not stored_serial)
+                and _host_from_address(entry.data.get(CONF_HOST)) == hostname.lower()
+            ):
+                return self.async_abort(reason="already_configured")
 
         return self.async_show_form(
             step_id="user",
@@ -107,16 +187,59 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 router = await get_api(self.hass, user_input)
                 keen = await router.show_version()
 
+                discovered_serial = getattr(self, "_discovered_serial", None)
+                if discovered_serial and router.serial_number and not _same_serial(
+                    discovered_serial, router.serial_number
+                ):
+                    # The host in the SSDP form is editable. Never assign the
+                    # discovered router's identity to a different router.
+                    _LOGGER.warning(
+                        "SSDP router serial differs from the authenticated router"
+                    )
+                    errors["base"] = "cannot_connect"
+                    return self.async_show_form(
+                        step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors
+                    )
+
                 title = f"{keen['vendor']} {keen['model']} {user_input['host']}"
 
             except Exception as error:
                 _LOGGER.error('Keenetic Api Integration Exception - {}'.format(error))
                 errors['base'] = str(error)
             if title != "":
-                unique_id: str = f"{keen['vendor']} {keen['device']} {format_mac(router.mac).replace(':', '')}"
-                await self.async_set_unique_id(unique_id)
+                legacy_unique_id: str = f"{keen['vendor']} {keen['device']} {format_mac(router.mac).replace(':', '')}"
+                serial_number = router.serial_number or None
+
+                # A discovered flow already has a stable SSDP ID. Do not
+                # replace it with the historical MAC-based ID when the user
+                # submits the credentials form.
+                for entry in self._async_current_entries():
+                    if (
+                        _matches_authenticated_router(
+                            entry.unique_id, legacy_unique_id, serial_number
+                        )
+                        or _same_serial(entry.data.get(CONF_ROUTER_SERIAL), serial_number)
+                    ):
+                        if self.source == config_entries.SOURCE_SSDP:
+                            # Authentication proved this is the same router,
+                            # even if DHCP changed its host. Keep all existing
+                            # entity IDs by preserving the config entry ID.
+                            updated_data = {**entry.data, **user_input}
+                            if serial_number:
+                                updated_data[CONF_ROUTER_SERIAL] = serial_number
+                            if updated_data != entry.data:
+                                self.hass.config_entries.async_update_entry(
+                                    entry, data=updated_data
+                                )
+                        return self.async_abort(reason="already_configured")
+
+                if self.unique_id is None:
+                    await self.async_set_unique_id(legacy_unique_id)
                 self._abort_if_unique_id_configured()
-                return self.async_create_entry(title=title, data=user_input)
+                entry_data = dict(user_input)
+                if serial_number:
+                    entry_data[CONF_ROUTER_SERIAL] = serial_number
+                return self.async_create_entry(title=title, data=entry_data)
 
         return self.async_show_form(step_id="user", data_schema=STEP_USER_DATA_SCHEMA, errors=errors)
 

@@ -417,6 +417,7 @@ class KeeneticEthernetPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinat
         super().__init__(coordinator)
         self._port_data = port_data
         self._id = port_data["id"]
+        self._control_id = port_data.get("control_id", self._id)
         self._type = port_data["type"]
         
         # Определяем имя и translation_key в зависимости от типа порта
@@ -434,40 +435,26 @@ class KeeneticEthernetPortSwitchEntity(CoordinatorEntity[KeeneticRouterCoordinat
         }
     
     @property
-    def is_on(self) -> bool:
-        """Return state."""
-        # Обновляем данные о порте при каждом запросе состояния
-        try:
-            # Здесь нужно получить актуальное состояние порта
-            # Можно использовать link == "up" как индикатор включенного состояния
-            for port_id, port_data in self.coordinator.data.show_interface.items():
-                if port_id == self._id or (self._type == "port" and port_id in self._id):
-                    return port_data.get("link", "down") == "up"
-            return False
-        except Exception as ex:
-            _LOGGER.error(f"Error getting port state: {ex}")
-            return False
+    def is_on(self) -> bool | None:
+        """Return administrative enablement; a missing cable is not OFF."""
+        states = getattr(self.coordinator.data, "interface_admin_states", {})
+        if not isinstance(states, dict):
+            return None
+        enabled = states.get(self._control_id)
+        return enabled if isinstance(enabled, bool) else None
     
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn on the port."""
-        # Реализация включения порта
         try:
-            port_id = self._id
-            if self._type == "port" and "_port_" in self._id:
-                port_id = self._id.split("_port_")[1]
-            await self.coordinator.router.turn_on_off_interface(port_id, 'up')
+            await self.coordinator.router.turn_on_off_interface(self._control_id, 'up')
             await self.coordinator.async_request_refresh()
         except Exception as ex:
             _LOGGER.error(f"Error turning on port {self._id}: {ex}")
     
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn off the port."""
-        # Реализация выключения порта
         try:
-            port_id = self._id
-            if self._type == "port" and "_port_" in self._id:
-                port_id = self._id.split("_port_")[1]
-            await self.coordinator.router.turn_on_off_interface(port_id, 'down')
+            await self.coordinator.router.turn_on_off_interface(self._control_id, 'down')
             await self.coordinator.async_request_refresh()
         except Exception as ex:
             _LOGGER.error(f"Error turning off port {self._id}: {ex}")

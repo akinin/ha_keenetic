@@ -47,6 +47,7 @@ from .const import (
     CONF_CREATE_IMAGE_QR,
     CONF_SELECT_CREATE_DT,
     CONF_SENSOR_GROUPS,
+    CONF_ROUTER_SERIAL,
     DEFAULT_SENSOR_GROUPS,
     INTERFACE_SENSOR_KEYS,
     ROUTER_SENSOR_KEYS,
@@ -78,6 +79,14 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     client = await get_api(hass, entry.data)
+
+    # Keep the original config-entry unique ID: it forms part of existing
+    # entity unique IDs. Store the router's authenticated serial separately so
+    # SSDP can recognize legacy MAC-based entries after a host address change.
+    if client.serial_number and entry.data.get(CONF_ROUTER_SERIAL) != client.serial_number:
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_ROUTER_SERIAL: client.serial_number}
+        )
 
     coordinator_full = KeeneticRouterCoordinator(hass, client, entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL), entry)
     await coordinator_full.async_config_entry_first_refresh()

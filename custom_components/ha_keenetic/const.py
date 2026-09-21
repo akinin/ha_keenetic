@@ -24,6 +24,7 @@ CONF_BACKUP_TYPE_FILE: Final = "backup_type_file"
 CONF_CREATE_DT: Final = "create_device_tracker"
 CONF_SELECT_CREATE_DT: Final = "create_select_device_tracker"
 CONF_SENSOR_GROUPS: Final = "sensor_groups"
+CONF_ROUTER_SERIAL: Final = "router_serial"
 
 SENSOR_GROUP_ROUTER: Final = "router_diagnostics"
 SENSOR_GROUP_INTERFACE: Final = "interface_traffic"

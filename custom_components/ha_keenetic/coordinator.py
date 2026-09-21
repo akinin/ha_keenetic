@@ -116,6 +116,17 @@ class KeeneticRouterFirmwareCoordinator(DataUpdateCoordinator):
                 break
             _LOGGER.debug(f"{self.router.mac} data_components_list not data {data_components_list}")
             await asyncio.sleep(TIMER_REPEATED_REQUEST_FIREWARE)
+        if data_components_list.get('continued', False):
+            _LOGGER.debug("%s components_list remained incomplete", self.router.mac)
+            return self._version_firmware
+        if (
+            not isinstance(data_components_list.get('firmware'), dict)
+            or not isinstance(data_components_list.get('local'), dict)
+            or not data_components_list['firmware'].get('version')
+            or not data_components_list['local'].get('version')
+        ):
+            _LOGGER.debug("%s components_list returned no firmware versions", self.router.mac)
+            return self._version_firmware
         firmware = {}
         firmware['new'] = data_components_list.get('firmware')
         firmware['current'] = data_components_list.get('local')

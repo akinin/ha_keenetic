@@ -9,7 +9,7 @@ import aiohttp
 import logging
 import aiofiles.os
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .processor_ethernet import EthernetProcessor
 from .processor_mesh import MeshProcessor
@@ -34,6 +34,7 @@ class KeeneticFullData:
     show_media: dict[str, Any]
     stat_interface: dict[str, Any]
     show_pingcheck: dict[str, Any]
+    interface_admin_states: dict[str, bool] = field(default_factory=dict)
 
 @dataclass
 class DataDevice():
@@ -242,7 +243,7 @@ class Router:
                     stats = await self.show_interface_stat(port_id)
                     return stats
                 except Exception as ex:
-                    _LOGGER.error(f"Error getting statistics for port {port_id}: {ex}")
+                    _LOGGER.debug("Could not read statistics for port %s: %s", port_id, ex)
                     return {}
             
             return await EthernetProcessor.process_ethernet_ports(interfaces, get_port_statistics)
@@ -436,7 +437,8 @@ class Router:
         return response.status == 200
 
     async def components_list(self):
-        return await self.api("post", "/rci/components/list")
+        # KeeneticOS can return an empty response when this POST has no body.
+        return await self.api("post", "/rci/components/list", {})
 
     async def release_notes(self, version: str, channel: str = "dev"):
         return await self.api("post", "/rci/webhelp/release-notes", {"version":f"{version}","locale":"ru","channel":f"{channel}"})
@@ -474,6 +476,26 @@ class Router:
 
     async def show_interface(self):
         return await self.api("get", "/rci/show/interface")
+
+    async def get_interface_admin_states(self) -> dict[str, bool]:
+        """Read configured interface enablement, not physical link status."""
+        try:
+            interfaces = await self.api("get", "/rci/interface")
+        except Exception as ex:
+            _LOGGER.debug("Could not read Keenetic interface settings: %s", ex)
+            return {}
+
+        if not isinstance(interfaces, dict):
+            return {}
+
+        # Configuration may contain credentials. Keep only explicit boolean states.
+        return {
+            interface_id: interface_data["up"]
+            for interface_id, interface_data in interfaces.items()
+            if isinstance(interface_id, str)
+            and isinstance(interface_data, dict)
+            and isinstance(interface_data.get("up"), bool)
+        }
 
     async def show_rc_interface(self):
         interfaces = await self.api("get", "/rci/show/rc/interface")
@@ -691,6 +713,9 @@ class Router:
                     )
 
         stat_interface = await self.show_stat_interface()
+        interface_admin_states = (
+            await self.get_interface_admin_states() if self.hw_type == "router" else {}
+        )
 
         return KeeneticFullData(
             show_system,
@@ -705,4 +730,5 @@ class Router:
             show_media,
             stat_interface,
             show_pingcheck,
+            interface_admin_states,
             )

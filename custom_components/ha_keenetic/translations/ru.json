@@ -222,7 +222,7 @@
         "name": "{name} занято"
       },
       "storage_used_percent": {
-        "name": "{name} занято"
+        "name": "{name} занято (%)"
       },
       "storage_state": {
         "name": "{name} состояние"

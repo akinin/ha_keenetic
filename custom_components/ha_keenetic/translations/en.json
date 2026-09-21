@@ -225,7 +225,7 @@
         "name": "{name} used"
       },
       "storage_used_percent": {
-        "name": "{name} used"
+        "name": "{name} used (%)"
       },
       "storage_state": {
         "name": "{name} state"
