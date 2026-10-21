@@ -1,3 +1,22 @@
+# v2.1.4
+
+## Fixed
+
+- Repair legacy saved IPv6 router URLs without square brackets during SSDP rediscovery, preventing invalid-port exceptions without changing config-entry or entity unique IDs (#27).
+- Preserve the configured IPv4 or IPv6 address family when the same router advertises both, while still following address changes within that family.
+- Compare equivalent IPv6 address spellings consistently and use bracketed IPv6 URLs in new discovery forms.
+- Skip malformed saved addresses and SSDP locations without crashing discovery. Preserve the configured scheme, port, credentials and URL path when updating a valid address.
+- Allow the shared `pyqrcode` dependency to follow Home Assistant updates, as required by current hassfest validation.
+
+## Added
+
+- Local integration icons and logos for Home Assistant 2026.3 and newer (#28, contributed by @frenck).
+- SSDP regression tests and automated unit tests on Python 3.10 and 3.14.
+
+## Updating
+
+Update through HACS and restart Home Assistant. Existing configuration and entity IDs are preserved; removing and adding the integration again is not required.
+
 # v2.1.3
 
 Sensor selection update for the Keenetic Router integration.
