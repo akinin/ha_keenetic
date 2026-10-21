@@ -1,10 +1,11 @@
 """The Keenetic API Config flow."""
 
 import logging
+from ipaddress import ip_address
 import voluptuous as vol
 from typing import Any
 import operator
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
 from homeassistant import config_entries
 from homeassistant.core import callback
@@ -53,12 +54,40 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-def _host_from_address(address: str | None) -> str | None:
-    """Extract a host from either a URL or a bare host in an existing entry."""
+def _parse_router_address(address: str | None) -> ParseResult | None:
+    """Parse saved addresses, including legacy unbracketed IPv6 literals."""
     if not address:
         return None
-    parsed = urlparse(address if "://" in address else f"//{address}")
-    return parsed.hostname.lower() if parsed.hostname else None
+    try:
+        parsed = urlparse(address if "://" in address else f"//{address}")
+        userinfo, separator, authority = parsed.netloc.rpartition("@")
+        if not separator:
+            authority = parsed.netloc
+        if not authority.startswith("[") and authority.count(":") > 1:
+            # An unbracketed IPv6 literal has no unambiguous embedded port.
+            # Keep its full address; the entry's separate port is unchanged.
+            ip_address(authority)
+            prefix = f"{userinfo}@" if separator else ""
+            parsed = parsed._replace(netloc=f"{prefix}[{authority}]")
+        if not parsed.hostname:
+            return None
+        # urllib defers invalid-port errors until this property is accessed.
+        if parsed.port is not None and not 0 < parsed.port <= 65535:
+            return None
+        return parsed
+    except (TypeError, ValueError):
+        return None
+
+
+def _host_from_address(address: str | None) -> str | None:
+    """Extract a normalized host without letting a bad saved URL break SSDP."""
+    parsed = _parse_router_address(address)
+    if parsed is None:
+        return None
+    try:
+        return str(ip_address(parsed.hostname))
+    except ValueError:
+        return parsed.hostname.lower().rstrip(".")
 
 
 def _matches_authenticated_router(
@@ -80,18 +109,35 @@ def _same_serial(left: str | None, right: str | None) -> bool:
 
 
 def _update_discovered_host(hass, entry, hostname: str) -> None:
-    """Follow a router's new address without changing its scheme or port."""
+    """Repair legacy URLs and follow address changes within the saved IP family."""
     old_address = entry.data.get(CONF_HOST)
-    if not old_address or _host_from_address(old_address) == hostname.lower():
+    if not old_address:
         return
-    parsed = urlparse(old_address if "://" in old_address else f"//{old_address}")
+    parsed = _parse_router_address(old_address)
+    old_host = _host_from_address(old_address)
+    new_host = _host_from_address(hostname)
+    if parsed is None or old_host is None or new_host is None:
+        _LOGGER.warning("Skipping SSDP address update for an invalid router address")
+        return
+    try:
+        same_family = ip_address(old_host).version == ip_address(new_host).version
+    except ValueError:
+        same_family = True
+    if old_host == new_host or not same_family:
+        source = old_address if "://" in old_address else f"//{old_address}"
+        if parsed.geturl() == source:
+            return
+        # Repair a legacy literal even when the advertisement uses IPv4.
+        new_host = old_host
     scheme = parsed.scheme or ("https" if entry.data.get(CONF_SSL) else "http")
-    host = f"[{hostname}]" if ":" in hostname else hostname
+    host = f"[{new_host}]" if ":" in new_host else new_host
     userinfo = parsed.netloc.rpartition("@")[0] + "@" if "@" in parsed.netloc else ""
     netloc = f"{userinfo}{host}"
     if parsed.port is not None:
         netloc += f":{parsed.port}"
     new_address = parsed._replace(scheme=scheme, netloc=netloc).geturl()
+    if new_address == old_address:
+        return
     hass.config_entries.async_update_entry(
         entry,
         data={**entry.data, CONF_HOST: new_address},
@@ -118,7 +164,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if "keenetic" not in manufacturer and "zyxel" not in manufacturer:
             return self.async_abort(reason="not_keenetic")
 
-        hostname = urlparse(discovery_info.ssdp_location).hostname
+        hostname = _host_from_address(discovery_info.ssdp_location)
         if hostname is None:
             return self.async_abort(reason="no_host")
 
@@ -157,8 +203,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_abort(reason="already_configured")
             if (
                 (not serial or not stored_serial)
-                and _host_from_address(entry.data.get(CONF_HOST)) == hostname.lower()
+                and _host_from_address(entry.data.get(CONF_HOST)) == hostname
             ):
+                _update_discovered_host(self.hass, entry, hostname)
                 return self.async_abort(reason="already_configured")
 
         return self.async_show_form(
@@ -167,7 +214,10 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_USERNAME, default="admin"): cv.string,
                     vol.Required(CONF_PASSWORD, default=""): cv.string,
-                    vol.Required(CONF_HOST, default=f"http://{hostname}"): str,
+                    vol.Required(
+                        CONF_HOST,
+                        default=f"http://[{hostname}]" if ":" in hostname else f"http://{hostname}",
+                    ): str,
                     vol.Required(CONF_PORT, default=80): int,
                     vol.Required(CONF_SSL, default=False): bool,
                 }
